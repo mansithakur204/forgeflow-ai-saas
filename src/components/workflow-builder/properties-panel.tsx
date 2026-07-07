@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 
 interface PropertiesPanelProps {
   selectedNode: CanvasNode | null;
+  selectionCount?: number;
   onClose: () => void;
   onDeleteNode: (nodeId: string) => void;
   onDuplicateNode: (nodeId: string) => void;
@@ -116,6 +117,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 
 export function PropertiesPanel({
   selectedNode,
+  selectionCount = 0,
   onClose,
   onDeleteNode,
   onDuplicateNode,
@@ -179,8 +181,27 @@ export function PropertiesPanel({
           )}
         </div>
 
-        {/* ── No selection state ───────────────────────────────────────── */}
-        {!selectedNode && (
+        {/* ── Multi-select banner ─────────────────────────────────────────── */}
+        {!selectedNode && selectionCount > 1 && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-6">
+            <div
+              className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <Settings className="w-5 h-5 text-brand-500/70" />
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {selectionCount} nodes selected
+            </p>
+            <p className="text-xs text-muted-foreground/50">
+              Press Delete to remove all.
+              Press Ctrl+D to duplicate the last selected.
+            </p>
+          </div>
+        )}
+
+        {/* ── No selection state ─────────────────────────────────────────── */}
+        {!selectedNode && selectionCount <= 1 && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-6">
             <div
               className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"

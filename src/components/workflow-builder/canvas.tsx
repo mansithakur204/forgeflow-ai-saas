@@ -12,6 +12,7 @@ import {
 import { WorkflowNode, outputPortId, inputPortId } from "./node";
 import { ConnectionLine, type PortPosition } from "./connection-line";
 import { CanvasEmptyState } from "./canvas-empty-state";
+import { MiniMap } from "./mini-map";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForgeFlow AI — Workflow Canvas
@@ -33,7 +34,7 @@ interface DraftConnection {
 interface CanvasProps {
   nodes: CanvasNode[];
   connections: NodeConnection[];
-  selectedNodeId: string | null;
+  selectedNodeIds: string[];
   viewport: CanvasViewport;
   isRunning: boolean;
   onSelectNode: (nodeId: string | null) => void;
@@ -74,7 +75,7 @@ const ZOOM_STEP = 0.08;
 export function Canvas({
   nodes,
   connections,
-  selectedNodeId,
+  selectedNodeIds,
   viewport,
   isRunning,
   onSelectNode,
@@ -179,6 +180,21 @@ export function Canvas({
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [viewport, onViewportChange]);
+
+  // ── Canvas dimensions for the mini map ─────────────────────────────────────
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      setCanvasDimensions({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // ── Drop from palette ───────────────────────────────────────────────────────
   const handleDrop = useCallback(
@@ -348,7 +364,7 @@ export function Canvas({
             <WorkflowNode
               key={node.id}
               node={node}
-              isSelected={selectedNodeId === node.id}
+              isSelected={selectedNodeIds.includes(node.id)}
               zoom={viewport.zoom}
               onSelect={onSelectNode}
               onMove={onMoveNode}
@@ -359,7 +375,18 @@ export function Canvas({
         </AnimatePresence>
       </div>
 
-      {/* ── Empty state ─────────────────────────────────────────────────── */}
+      {/* ── Mini map ───────────────────────────────────────────────────── */}
+      {nodes.length > 0 && (
+        <MiniMap
+          nodes={nodes}
+          viewport={viewport}
+          canvasWidth={canvasDimensions.width}
+          canvasHeight={canvasDimensions.height}
+          onViewportChange={onViewportChange}
+        />
+      )}
+
+      {/* ── Empty state ───────────────────────────────────────────────────── */}
       {nodes.length === 0 && (
         <CanvasEmptyState onAddNode={onEmptyAddNode} />
       )}

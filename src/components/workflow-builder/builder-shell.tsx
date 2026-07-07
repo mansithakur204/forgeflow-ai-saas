@@ -20,7 +20,7 @@ import { Monitor } from "lucide-react";
 // ForgeFlow AI — Builder Shell (Orchestrator)
 //
 // Full-screen client component. Owns all workflow state:
-//   nodes, connections, selectedNodeId, viewport, history (undo/redo)
+//   nodes, connections, selectedNodeIds, viewport, history (undo/redo)
 //
 // Layout (full-viewport, no global topbar/sidebar/footer):
 //   ┌─────────────────────────────────────────────────────────┐
@@ -70,7 +70,7 @@ export function BuilderShell({
   // ── Core state ──────────────────────────────────────────────────────────────
   const [nodes, setNodes] = useState<CanvasNode[]>(initialNodes);
   const [connections, setConnections] = useState<NodeConnection[]>(initialConnections);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [viewport, setViewport] = useState<CanvasViewport>(DEFAULT_VIEWPORT);
   const [workflowName, setWorkflowName] = useState(initialName);
   const [isRunning, setIsRunning] = useState(false);
@@ -124,16 +124,36 @@ export function BuilderShell({
         e.preventDefault();
         handleRedo();
       }
+      // Ctrl+D — duplicate last selected node
+      if ((e.metaKey || e.ctrlKey) && e.key === "d" && !isInput) {
+        e.preventDefault();
+        const lastId = selectedNodeIds[selectedNodeIds.length - 1];
+        if (lastId) handleDuplicateNode(lastId);
+      }
+      // Ctrl+A — select all nodes
+      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !isInput) {
+        e.preventDefault();
+        setSelectedNodeIds(nodes.map((n) => n.id));
+      }
+      // Delete / Backspace — remove all selected nodes at once
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedNodeId && !isInput) {
-          handleDeleteNode(selectedNodeId);
+        if (selectedNodeIds.length > 0 && !isInput) {
+          const idsToDelete = new Set(selectedNodeIds);
+          const nextNodes = nodes.filter((n) => !idsToDelete.has(n.id));
+          const nextConns = connections.filter(
+            (c) => !idsToDelete.has(c.fromNodeId) && !idsToDelete.has(c.toNodeId)
+          );
+          setNodes(nextNodes);
+          setConnections(nextConns);
+          setSelectedNodeIds([]);
+          pushHistory(nextNodes, nextConns);
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, handleUndo, handleRedo]);
+  }, [selectedNodeIds, nodes, connections, handleUndo, handleRedo]);
 
   // ── Node operations ─────────────────────────────────────────────────────────
 
@@ -151,7 +171,7 @@ export function BuilderShell({
       };
       const nextNodes = [...nodes, newNode];
       setNodes(nextNodes);
-      setSelectedNodeId(newNode.id);
+      setSelectedNodeIds([newNode.id]);
       pushHistory(nextNodes, connections);
     },
     [nodes, connections]
@@ -188,7 +208,7 @@ export function BuilderShell({
       );
       setNodes(nextNodes);
       setConnections(nextConns);
-      setSelectedNodeId(null);
+      setSelectedNodeIds((prev) => prev.filter((id) => id !== nodeId));
       pushHistory(nextNodes, nextConns);
     },
     [nodes, connections]
@@ -206,7 +226,7 @@ export function BuilderShell({
       };
       const nextNodes = [...nodes, newNode];
       setNodes(nextNodes);
-      setSelectedNodeId(newNode.id);
+      setSelectedNodeIds([newNode.id]);
       pushHistory(nextNodes, connections);
     },
     [nodes, connections]
@@ -319,9 +339,10 @@ export function BuilderShell({
     handleAddNode("trigger_webhook", { x: 200, y: 200 });
   }, [handleAddNode]);
 
-  // ── Selected node object ────────────────────────────────────────────────────
+  // ── Selected node object (last in selection for properties panel) ───────────
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const lastSelectedId = selectedNodeIds[selectedNodeIds.length - 1] ?? null;
+  const selectedNode = nodes.find((n) => n.id === lastSelectedId) ?? null;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
@@ -373,10 +394,10 @@ export function BuilderShell({
           <Canvas
             nodes={nodes}
             connections={connections}
-            selectedNodeId={selectedNodeId}
+            selectedNodeIds={selectedNodeIds}
             viewport={viewport}
             isRunning={isRunning}
-            onSelectNode={setSelectedNodeId}
+            onSelectNode={(id) => setSelectedNodeIds(id ? [id] : [])}
             onMoveNode={handleMoveNode}
             onAddNode={handleAddNode}
             onAddConnection={handleAddConnection}
@@ -390,7 +411,8 @@ export function BuilderShell({
           {/* Properties panel */}
           <PropertiesPanel
             selectedNode={selectedNode}
-            onClose={() => setSelectedNodeId(null)}
+            selectionCount={selectedNodeIds.length}
+            onClose={() => setSelectedNodeIds([])}
             onDeleteNode={handleDeleteNode}
             onDuplicateNode={handleDuplicateNode}
             onUpdateNode={handleUpdateNode}
