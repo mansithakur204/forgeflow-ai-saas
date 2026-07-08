@@ -53,7 +53,11 @@ interface FieldErrors {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, fetchStatus } = useSignIn();
+  
+  const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+  // Call useSignIn conditionally/safely to prevent errors when ClerkProvider is unmounted
+  const clerkSignIn = isMock ? { signIn: null, fetchStatus: undefined } : useSignIn();
+  const { signIn, fetchStatus } = clerkSignIn;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,7 +66,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
 
-  const isClerkReady = fetchStatus !== undefined;
+  const isClerkReady = isMock || fetchStatus !== undefined;
 
   // ── Client-side validation ────────────────────────────────────────────────
   function validate(): boolean {
@@ -80,6 +84,16 @@ export default function LoginPage() {
   // ── Email + Password sign-in ──────────────────────────────────────────────
   async function handleEmailSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isMock) {
+      if (!validate()) return;
+      setIsSubmitting(true);
+      setErrors({});
+      document.cookie = "mock_session=active; path=/; max-age=86400";
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 500);
+      return;
+    }
     if (!signIn || !validate()) return;
 
     setIsSubmitting(true);
@@ -119,6 +133,16 @@ export default function LoginPage() {
 
   // ── OAuth sign-in ─────────────────────────────────────────────────────────
   async function handleOAuthSignIn(strategy: "oauth_google" | "oauth_github") {
+    if (isMock) {
+      const key = strategy === "oauth_google" ? "google" : "github";
+      setOauthLoading(key);
+      setErrors({});
+      document.cookie = "mock_session=active; path=/; max-age=86400";
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 500);
+      return;
+    }
     if (!signIn) return;
     const key = strategy === "oauth_google" ? "google" : "github";
     setOauthLoading(key);

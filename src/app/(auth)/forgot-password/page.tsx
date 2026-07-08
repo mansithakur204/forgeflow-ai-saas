@@ -58,7 +58,11 @@ type Step = "email" | "reset" | "done";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const { signIn, fetchStatus } = useSignIn();
+  
+  const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+  // Call useSignIn conditionally/safely to prevent errors when ClerkProvider is unmounted
+  const clerkSignIn = isMock ? { signIn: null, fetchStatus: undefined } : useSignIn();
+  const { signIn, fetchStatus } = clerkSignIn;
 
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -68,11 +72,28 @@ export default function ForgotPasswordPage() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isClerkReady = fetchStatus !== undefined;
+  const isClerkReady = isMock || fetchStatus !== undefined;
 
   // ── Step 1: create sign-in with identifier, send reset code ───────────────
   async function handleRequestCode(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isMock) {
+      if (!email.trim()) {
+        setErrors({ email: "Email is required." });
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setErrors({ email: "Please enter a valid email address." });
+        return;
+      }
+      setIsSubmitting(true);
+      setErrors({});
+      setTimeout(() => {
+        setStep("reset");
+        setIsSubmitting(false);
+      }, 500);
+      return;
+    }
     if (!signIn) return;
 
     if (!email.trim()) {
@@ -119,6 +140,25 @@ export default function ForgotPasswordPage() {
   // ── Step 2: verify code + submit new password ─────────────────────────────
   async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isMock) {
+      const next: FieldErrors = {};
+      if (!code.trim()) next.code = "Code is required.";
+      if (!newPassword) next.password = "New password is required.";
+      else if (newPassword.length < 8) next.password = "Password must be at least 8 characters.";
+      if (Object.keys(next).length > 0) {
+        setErrors(next);
+        return;
+      }
+      setIsSubmitting(true);
+      setErrors({});
+      document.cookie = "mock_session=active; path=/; max-age=86400";
+      setTimeout(() => {
+        setStep("done");
+        setIsSubmitting(false);
+        setTimeout(() => router.push("/dashboard"), 2000);
+      }, 500);
+      return;
+    }
     if (!signIn) return;
 
     const next: FieldErrors = {};

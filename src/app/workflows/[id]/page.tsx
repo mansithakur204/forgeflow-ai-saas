@@ -32,7 +32,12 @@ export async function generateMetadata({ params }: WorkflowBuilderPageProps) {
 export default async function WorkflowBuilderPage({
   params,
 }: WorkflowBuilderPageProps) {
-  const user = await currentUser();
+  const user = process.env.NEXT_PUBLIC_MOCK_AUTH === "true"
+    ? ({
+        firstName: "Jane",
+        emailAddresses: [{ emailAddress: "jane.doe@example.com" }],
+      } as any)
+    : await currentUser();
   if (!user) redirect("/login");
 
   const { id } = await params;

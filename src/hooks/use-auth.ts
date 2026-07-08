@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
@@ -29,9 +30,52 @@ export interface AuthState {
 }
 
 export function useAuth(): AuthState {
-  const { isLoaded, isSignedIn, user } = useUser();
-  const { signOut: clerkSignOut } = useClerk();
+  const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+  
+  // Call Clerk hooks conditionally/safely to prevent errors when ClerkProvider is not mounted
+  const clerkUser = isMock ? { isLoaded: false, isSignedIn: false, user: null } : useUser();
+  const clerkObj = isMock ? { signOut: null } : useClerk();
   const router = useRouter();
+
+  // State to prevent hydration mismatch in mock mode
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    if (isMock) {
+      setIsMounted(true);
+    }
+  }, [isMock]);
+
+  if (isMock) {
+    const hasMockSession = isMounted && typeof window !== "undefined" && document.cookie.includes("mock_session=active");
+
+    return {
+      isLoaded: isMounted,
+      isSignedIn: hasMockSession,
+      user: hasMockSession
+        ? ({
+            id: "mock_user_123",
+            firstName: "Jane",
+            lastName: "Doe",
+            fullName: "Jane Doe",
+            imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+            primaryEmailAddress: { emailAddress: "jane.doe@example.com" },
+            emailAddresses: [{ emailAddress: "jane.doe@example.com" }],
+          } as any)
+        : null,
+      displayName: hasMockSession ? "Jane" : "User",
+      email: hasMockSession ? "jane.doe@example.com" : null,
+      imageUrl: hasMockSession ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" : null,
+      signOut: async () => {
+        if (typeof window !== "undefined") {
+          document.cookie = "mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        }
+        router.push("/login");
+      },
+    };
+  }
+
+  const { isLoaded, isSignedIn, user } = clerkUser;
+  const { signOut: clerkSignOut } = clerkObj;
 
   const displayName =
     user?.firstName ??
@@ -42,7 +86,9 @@ export function useAuth(): AuthState {
   const imageUrl = user?.imageUrl ?? null;
 
   async function signOut() {
-    await clerkSignOut();
+    if (clerkSignOut) {
+      await clerkSignOut();
+    }
     router.push("/login");
   }
 

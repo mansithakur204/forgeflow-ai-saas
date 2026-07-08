@@ -29,7 +29,12 @@ export const metadata = {
 };
 
 export default async function DashboardPage() {
-  const user = await currentUser();
+  const user = process.env.NEXT_PUBLIC_MOCK_AUTH === "true"
+    ? ({
+        firstName: "Jane",
+        emailAddresses: [{ emailAddress: "jane.doe@example.com" }],
+      } as any)
+    : await currentUser();
 
   if (!user) {
     redirect("/login");

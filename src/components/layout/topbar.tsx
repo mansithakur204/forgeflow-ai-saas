@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Search, Bell, User, Settings, CreditCard, LogOut, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -50,19 +50,9 @@ export function Topbar() {
   const { open, show, close } = useCommandPalette();
   const isMobile = useIsMobile();
 
-  // ── Clerk user data ───────────────────────────────────────────────────────
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
-
-  const displayName =
-    user?.fullName ??
-    (user?.firstName ? user.firstName : null) ??
-    user?.primaryEmailAddress?.emailAddress?.split("@")[0] ??
-    "User";
-
-  const email = user?.primaryEmailAddress?.emailAddress ?? "";
-  const avatarUrl = user?.imageUrl ?? "";
-  const initials = getInitials(user?.firstName, user?.lastName, email);
+  // ── User data ───────────────────────────────────────────────────────
+  const { user, isLoaded, signOut, displayName, email, imageUrl: avatarUrl } = useAuth();
+  const initials = getInitials(user?.firstName, user?.lastName, email ?? "");
 
   // ── Scroll shadow ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -73,7 +63,7 @@ export function Topbar() {
 
   // ── Sign out ───────────────────────────────────────────────────────────────
   async function handleSignOut() {
-    await signOut({ redirectUrl: "/login" });
+    await signOut();
   }
 
   return (
@@ -154,7 +144,7 @@ export function Topbar() {
             >
               <Avatar className="w-7 h-7 shrink-0">
                 <AvatarImage
-                  src={isLoaded ? avatarUrl : ""}
+                  src={(isLoaded && avatarUrl) ? avatarUrl : undefined}
                   alt={isLoaded ? `${displayName}'s avatar` : "Loading avatar"}
                 />
                 <AvatarFallback className="text-[11px] bg-brand-500/20 text-brand-500 font-semibold select-none">
@@ -178,7 +168,7 @@ export function Topbar() {
                 <DropdownMenuLabel className="p-0">
                   <div className="flex items-center gap-3 px-2 py-2.5">
                     <Avatar className="w-8 h-8 shrink-0">
-                      <AvatarImage src={isLoaded ? avatarUrl : ""} alt={displayName} />
+                      <AvatarImage src={(isLoaded && avatarUrl) ? avatarUrl : undefined} alt={displayName} />
                       <AvatarFallback className="text-xs bg-brand-500/20 text-brand-500 font-semibold select-none">
                         {isLoaded ? initials : "…"}
                       </AvatarFallback>

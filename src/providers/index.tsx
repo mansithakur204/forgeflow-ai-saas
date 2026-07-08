@@ -18,6 +18,14 @@ interface ProvidersProps {
  * ThemeProvider must wrap ToastProvider so Toaster can read the theme.
  */
 export function Providers({ children }: ProvidersProps) {
+  if (process.env.NEXT_PUBLIC_MOCK_AUTH === "true") {
+    return (
+      <ThemeProvider>
+        {children}
+        <ToastProvider />
+      </ThemeProvider>
+    );
+  }
   return (
     <ClerkProvider>
       <ThemeProvider>

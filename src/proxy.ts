@@ -15,11 +15,18 @@ const isPublicRoute = createRouteMatcher([
   "/sso-callback(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+const defaultMiddleware = clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect();
   }
 });
+
+export default async function proxy(req: any, event: any) {
+  if (process.env.NEXT_PUBLIC_MOCK_AUTH === "true") {
+    return;
+  }
+  return defaultMiddleware(req, event);
+}
 
 export const config = {
   matcher: [

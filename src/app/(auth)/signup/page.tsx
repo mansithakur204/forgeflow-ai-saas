@@ -83,7 +83,11 @@ type Step = "details" | "verify";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signUp, fetchStatus } = useSignUp();
+  
+  const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+  // Call useSignUp conditionally/safely to prevent errors when ClerkProvider is unmounted
+  const clerkSignUp = isMock ? { signUp: null, fetchStatus: undefined } : useSignUp();
+  const { signUp, fetchStatus } = clerkSignUp;
 
   const [step, setStep] = useState<Step>("details");
   const [firstName, setFirstName] = useState("");
@@ -96,7 +100,7 @@ export default function SignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
 
-  const isClerkReady = fetchStatus !== undefined;
+  const isClerkReady = isMock || fetchStatus !== undefined;
   const passwordStrength = getPasswordStrength(password);
 
   // ── Validate step 1 ───────────────────────────────────────────────────────
@@ -120,6 +124,16 @@ export default function SignupPage() {
   // ── Step 1: create account + send verification email ─────────────────────
   async function handleCreateAccount(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isMock) {
+      if (!validateDetails()) return;
+      setIsSubmitting(true);
+      setErrors({});
+      setTimeout(() => {
+        setStep("verify");
+        setIsSubmitting(false);
+      }, 500);
+      return;
+    }
     if (!signUp || !validateDetails()) return;
 
     setIsSubmitting(true);
@@ -167,6 +181,23 @@ export default function SignupPage() {
   // ── Step 2: verify email code ─────────────────────────────────────────────
   async function handleVerifyCode(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isMock) {
+      if (!code.trim()) {
+        setErrors({ code: "Verification code is required." });
+        return;
+      }
+      if (code.trim() !== "424242") {
+        setErrors({ code: "Invalid verification code." });
+        return;
+      }
+      setIsSubmitting(true);
+      setErrors({});
+      document.cookie = "mock_session=active; path=/; max-age=86400";
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 500);
+      return;
+    }
     if (!signUp) return;
 
     if (!code.trim()) {
@@ -198,6 +229,10 @@ export default function SignupPage() {
 
   // ── Resend verification code ──────────────────────────────────────────────
   async function handleResendCode() {
+    if (isMock) {
+      setErrors({});
+      return;
+    }
     if (!signUp) return;
     try {
       const result = await signUp.verifications.sendEmailCode();
@@ -213,6 +248,16 @@ export default function SignupPage() {
 
   // ── OAuth sign-up ─────────────────────────────────────────────────────────
   async function handleOAuthSignUp(strategy: "oauth_google" | "oauth_github") {
+    if (isMock) {
+      const key = strategy === "oauth_google" ? "google" : "github";
+      setOauthLoading(key);
+      setErrors({});
+      document.cookie = "mock_session=active; path=/; max-age=86400";
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 500);
+      return;
+    }
     if (!signUp) return;
     const key = strategy === "oauth_google" ? "google" : "github";
     setOauthLoading(key);
