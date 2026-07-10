@@ -35,14 +35,6 @@ stages:
               versionSpec: $(nodeVersion)
 
           - task: Cache@2
-            displayName: Cache npm
-            inputs:
-              key: 'npm | "$(Agent.OS)" | package-lock.json'
-              restoreKeys: |
-                npm | "$(Agent.OS)"
-              path: $(Pipeline.Workspace)/.npm
-
-          - task: Cache@2
             displayName: Cache Next.js build output
             inputs:
               key: 'next | "$(Agent.OS)" | package-lock.json | $(Build.SourceVersion)'
@@ -50,7 +42,7 @@ stages:
                 next | "$(Agent.OS)" | package-lock.json
               path: $(System.DefaultWorkingDirectory)/.next/cache
 
-          - script: npm ci --cache $(Pipeline.Workspace)/.npm --prefer-offline
+          - script: npm ci --no-audit --no-fund
             displayName: Install dependencies
 
           - script: npm run lint
