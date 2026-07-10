@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "organizationName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure DevOps organization name. Must be globally unique."
+      }
+    },
+    "projectName": {
+      "type": "string",
+      "defaultValue": "ForgeFlow AI",
+      "metadata": {
+        "description": "Azure DevOps project name."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "Central US",
+      "metadata": {
+        "description": "Azure DevOps account resource location."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "microsoft.visualstudio/account",
+      "apiVersion": "2014-04-01-preview",
+      "name": "[parameters('organizationName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "workload": "forgeflow-ai",
+        "environment": "prod"
+      },
+      "properties": {
+        "operationType": "Create",
+        "accountName": "[parameters('organizationName')]"
+      }
+    },
+    {
+      "type": "microsoft.visualstudio/account/project",
+      "apiVersion": "2014-04-01-preview",
+      "name": "[concat(parameters('organizationName'), '/', parameters('projectName'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('microsoft.visualstudio/account', parameters('organizationName'))]"
+      ],
+      "tags": {
+        "workload": "forgeflow-ai",
+        "environment": "prod"
+      },
+      "properties": {
+        "ProcessTemplateId": "adcc42ab-9882-485e-a3ed-7678f01f66bc",
+        "VersionControlOption": "Git"
+      }
+    }
+  ],
+  "outputs": {
+    "organizationUrl": {
+      "type": "string",
+      "value": "[concat('https://dev.azure.com/', parameters('organizationName'))]"
+    },
+    "projectName": {
+      "type": "string",
+      "value": "[parameters('projectName')]"
+    }
+  }
+}

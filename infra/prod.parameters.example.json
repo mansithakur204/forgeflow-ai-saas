@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "centralindia"
+    },
+    "appName": {
+      "value": "forgeflow-ai-prod-CHANGE-ME"
+    },
+    "cosmosAccountName": {
+      "value": "forgeflow-ai-mongo-CHANGE-ME"
+    },
+    "mongoDatabaseName": {
+      "value": "forgeflow"
+    },
+    "enableCosmosFreeTier": {
+      "value": true
+    },
+    "clerkPublishableKey": {
+      "value": "pk_test_your_publishable_key_here"
+    },
+    "clerkSecretKey": {
+      "value": "sk_test_your_secret_key_here"
+    }
+  }
+}
