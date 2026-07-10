@@ -29,7 +29,7 @@ stages:
         pool:
           vmImage: ubuntu-latest
         steps:
-          - task: NodeTool@0
+          - task: UseNode@1
             displayName: Use Node.js $(nodeVersion)
             inputs:
               versionSpec: $(nodeVersion)
@@ -149,7 +149,7 @@ stages:
                       set -euo pipefail
                       url="https://$(appName).azurewebsites.net"
                       for attempt in {1..24}; do
-                        status="$(curl -k -s -o /tmp/forgeflow-response.html -w "%{http_code}" "$url" || true)"
+                        status="$(curl -L -k -s -o /tmp/forgeflow-response.html -w "%{http_code}" "$url" || true)"
                         if [ "$status" = "200" ]; then
                           echo "Deployment verified: $url returned HTTP 200"
                           exit 0
@@ -158,5 +158,5 @@ stages:
                         sleep 10
                       done
                       echo "Application did not return HTTP 200. Recent App Service logs:"
-                      az webapp log tail --resource-group "$(azureResourceGroup)" --name "$(appName)" --timeout 60 || true
+                      az webapp log tail --resource-group "$(azureResourceGroup)" --name "$(appName)" || true
                       exit 1
