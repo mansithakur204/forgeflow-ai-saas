@@ -32,7 +32,7 @@ stages:
           - task: UseNode@1
             displayName: Use Node.js $(nodeVersion)
             inputs:
-              versionSpec: $(nodeVersion)
+              version: $(nodeVersion)
 
           - script: |
               node --version
