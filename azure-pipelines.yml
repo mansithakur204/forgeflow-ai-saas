@@ -34,6 +34,13 @@ stages:
             inputs:
               versionSpec: $(nodeVersion)
 
+          - script: |
+              node --version
+              npm --version
+              npm install -g npm@10.9.2
+              npm --version
+            displayName: Pin npm
+
           - task: Cache@2
             displayName: Cache Next.js build output
             inputs:
