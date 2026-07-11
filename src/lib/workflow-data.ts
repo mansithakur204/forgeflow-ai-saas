@@ -82,8 +82,17 @@ export interface CanvasNode {
   label: string;
   position: { x: number; y: number };
   config: Record<string, unknown>;
-  /** Runtime status (only meaningful when workflow is running) */
-  runStatus?: "idle" | "running" | "done" | "error";
+  runStatus?:
+    | "idle"
+    | "pending"
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "skipped"
+    | "retry_scheduled"
+    | "done"
+    | "error";
 }
 
 export interface NodeConnection {

@@ -28,16 +28,30 @@ export function inputPortId(nodeId: string, portId: string) {
 
 const RUN_STATUS_COLORS = {
   idle:    "border-border/50",
+  pending: "border-border/40",
+  queued:  "border-warning/40 shadow-sm",
   running: "border-brand-500 shadow-brand-sm animate-glow-pulse",
   done:    "border-success/50",
+  completed: "border-success/50",
   error:   "border-destructive/50",
+  failed:  "border-destructive/50",
+  cancelled: "border-border/30 opacity-60",
+  skipped: "border-border/30 opacity-60",
+  retry_scheduled: "border-warning/50 shadow-sm animate-pulse",
 } as const;
 
 const RUN_DOT_COLORS = {
   idle:    "bg-muted-foreground/40",
+  pending: "bg-muted-foreground/30",
+  queued:  "bg-warning animate-pulse",
   running: "bg-brand-500 animate-pulse",
   done:    "bg-success",
+  completed: "bg-success",
   error:   "bg-destructive",
+  failed:  "bg-destructive",
+  cancelled: "bg-muted-foreground/30",
+  skipped: "bg-muted-foreground/30",
+  retry_scheduled: "bg-warning animate-pulse",
 } as const;
 
 interface WorkflowNodeProps {

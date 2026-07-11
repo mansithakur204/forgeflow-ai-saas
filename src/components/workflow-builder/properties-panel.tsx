@@ -31,6 +31,7 @@ interface PropertiesPanelProps {
   onDeleteNode: (nodeId: string) => void;
   onDuplicateNode: (nodeId: string) => void;
   onUpdateNode: (nodeId: string, updates: Partial<CanvasNode>) => void;
+  hideHeader?: boolean;
 }
 
 // ── Collapsible section ──────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export function PropertiesPanel({
   onDeleteNode,
   onDuplicateNode,
   onUpdateNode,
+  hideHeader = false,
 }: PropertiesPanelProps) {
   const nodeDef = selectedNode ? getNodeType(selectedNode.typeId) : null;
   const accent = nodeDef ? (ACCENT_CLASSES[nodeDef.accentColor] ?? ACCENT_CLASSES.brand) : null;
@@ -146,40 +148,8 @@ export function PropertiesPanel({
     [selectedNode, onUpdateNode]
   );
 
-  return (
-    <AnimatePresence>
-      <motion.aside
-        key={selectedNode?.id ?? "empty"}
-        initial={{ opacity: 0, x: 16 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 16 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        id="properties-panel"
-        className={cn(
-          "w-[280px] shrink-0 flex flex-col",
-          "bg-sidebar border-l border-sidebar-border",
-          "overflow-hidden"
-        )}
-        aria-label="Node properties panel"
-      >
-        {/* ── Panel header ────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
-          <div className="flex items-center gap-2">
-            <Settings className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="text-xs font-semibold text-foreground">
-              {selectedNode ? "Node Properties" : "Properties"}
-            </span>
-          </div>
-          {selectedNode && (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              aria-label="Close properties panel"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+  const content = (
+    <div className="flex-1 flex flex-col overflow-hidden bg-sidebar">
 
         {/* ── Multi-select banner ─────────────────────────────────────────── */}
         {!selectedNode && selectionCount > 1 && (
@@ -357,6 +327,48 @@ export function PropertiesPanel({
             </Button>
           </div>
         )}
+      </div>
+  );
+
+  if (hideHeader) {
+    return content;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.aside
+        key={selectedNode?.id ?? "empty"}
+        initial={{ opacity: 0, x: 16 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 16 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        id="properties-panel"
+        className={cn(
+          "w-[280px] shrink-0 flex flex-col",
+          "bg-sidebar border-l border-sidebar-border",
+          "overflow-hidden"
+        )}
+        aria-label="Node properties panel"
+      >
+        {/* ── Panel header ────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
+          <div className="flex items-center gap-2">
+            <Settings className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs font-semibold text-foreground">
+              {selectedNode ? "Node Properties" : "Properties"}
+            </span>
+          </div>
+          {selectedNode && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Close properties panel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {content}
       </motion.aside>
     </AnimatePresence>
   );

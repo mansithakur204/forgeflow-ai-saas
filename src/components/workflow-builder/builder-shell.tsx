@@ -15,6 +15,27 @@ import { NodePalette } from "./node-palette";
 import { PropertiesPanel } from "./properties-panel";
 import { BuilderToolbar } from "./toolbar";
 import { Monitor } from "lucide-react";
+import {
+  WorkflowRunner,
+  createDefaultExecutorRegistry,
+  ExecutionContext,
+  validateWorkflowGraph,
+  parseWorkflowGraphFromCanvas,
+  InMemoryExecutionLogger,
+  ExecutionError,
+  type WorkflowRunSnapshot,
+  type ExecutionLogEntry,
+} from "@/engine";
+import type { NodeExecutionInput } from "@/engine/types/runtime";
+import { toast } from "sonner";
+import { ExecutionTimeline } from "./timeline";
+import { ExecutionLogsPanel } from "./logs-panel";
+import { ExecutionInspectorPanel } from "./inspector-panel";
+import { ChevronUp, ChevronDown, X, Settings, History } from "lucide-react";
+import { RunHistoryService, type RunHistoryEntry } from "./run-history-service";
+import { RunHistoryPanel } from "./history-panel";
+import { ReplayController } from "./replay-controller";
+import { ReplayToolbar } from "./replay-toolbar";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForgeFlow AI — Builder Shell (Orchestrator)
@@ -63,6 +84,7 @@ const ZOOM_MAX = 2.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function BuilderShell({
+  workflowId,
   workflowName: initialName,
   initialNodes,
   initialConnections,
@@ -75,6 +97,97 @@ export function BuilderShell({
   const [workflowName, setWorkflowName] = useState(initialName);
   const [isRunning, setIsRunning] = useState(false);
   const [pendingDropType, setPendingDropType] = useState<NodeTypeDefinition | null>(null);
+  const [runSnapshot, setRunSnapshot] = useState<WorkflowRunSnapshot | null>(null);
+  const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(false);
+  const [activeBottomTab, setActiveBottomTab] = useState<"timeline" | "logs" | "history">("logs");
+  const [executionLogs, setExecutionLogs] = useState<ExecutionLogEntry[]>([]);
+  const [activeRightTab, setActiveRightTab] = useState<"config" | "inspector">("config");
+  const [historyList, setHistoryList] = useState<RunHistoryEntry[]>([]);
+  const historyServiceRef = useRef<RunHistoryService>(new RunHistoryService());
+  const [replayController, setReplayController] = useState<ReplayController | null>(null);
+  const [, setReplayTick] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (replayController) {
+        replayController.destroy();
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [replayController]);
+
+  // ── Engine Execution References ─────────────────────────────────────────────
+  const activeRunIdRef = useRef<string | null>(null);
+  const activeContextRef = useRef<ExecutionContext | null>(null);
+  const registryRef = useRef<any>(null);
+  const runnerRef = useRef<WorkflowRunner | null>(null);
+
+  if (!registryRef.current) {
+    registryRef.current = createDefaultExecutorRegistry();
+  }
+
+  // ── Derived Snapshots / Logs for Replay Debugger ────────────────────────────
+  const activeSnapshot = replayController
+    ? replayController.getReplayedSnapshot()
+    : runSnapshot;
+
+  const activeLogs = replayController
+    ? replayController.getReplayedLogs()
+    : executionLogs;
+
+  const visualNodes = useMemo(() => {
+    if (!activeSnapshot) return nodes;
+    return nodes.map((node) => {
+      const exec = activeSnapshot.nodeExecutions.find((e) => e.nodeId === node.id);
+      return exec ? { ...node, runStatus: exec.status } : { ...node, runStatus: "idle" as const };
+    });
+  }, [nodes, activeSnapshot]);
+
+  // Bridge function connecting NodeExecutor type to INodeExecutor execution logic
+  const bridgeExecutor = useCallback(async (input: NodeExecutionInput) => {
+    const executorInstance = registryRef.current.get(input.node.typeId);
+    if (!executorInstance) {
+      throw new Error(`No executor found for node type ${input.node.typeId}`);
+    }
+
+    const activeContext = activeContextRef.current;
+    if (!activeContext) {
+      throw new Error("No active execution context found");
+    }
+
+    // Set outputs on context from preceding runs to resolve variables/references
+    activeContext.setNodeOutputs(input.node.id, input.inputs);
+
+    const abortControl = { aborted: false };
+    const result = await executorInstance.execute({
+      node: input.node,
+      context: activeContext,
+      inputs: input.inputs,
+      signal: abortControl,
+      attempt: input.attempt,
+    });
+
+    if (!result.success) {
+      const isRetryable = result.error?.retryable ?? false;
+      throw new ExecutionError(
+        result.error?.code ?? "EXECUTOR_FAILED",
+        result.error?.message ?? "Node execution failed",
+        { retryable: isRetryable }
+      );
+    }
+
+    return result.outputs;
+  }, []);
+
+  if (!runnerRef.current) {
+    runnerRef.current = new WorkflowRunner({
+      executor: bridgeExecutor,
+      executorRegistry: registryRef.current.asReadonly(),
+    });
+  }
 
   // ── Undo / redo ─────────────────────────────────────────────────────────────
   const historyRef = useRef<HistoryEntry[]>([{ nodes: initialNodes, connections: initialConnections }]);
@@ -311,15 +424,183 @@ export function BuilderShell({
     });
   }, [nodes]);
 
-  // ── Run simulation ──────────────────────────────────────────────────────────
+  // ── Engine Execution Orchestration ──────────────────────────────────────────
 
-  const handleRun = useCallback(() => {
+  const handleRun = useCallback(async () => {
+    // Clear any existing polling loop
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    // 1. Parse workflow graph
+    const parsedWf = parseWorkflowGraphFromCanvas(
+      workflowId,
+      workflowName,
+      nodes,
+      connections
+    );
+
+    // 2. Validate workflow graph
+    const validation = validateWorkflowGraph(parsedWf);
+    if (!validation.valid) {
+      toast.error(`Validation failed: ${validation.errors[0].message}`);
+      return;
+    }
+
+    // 3. Setup context & logger
+    const runId = `run-${Date.now()}`;
+    activeRunIdRef.current = runId;
+
+    const logger = new InMemoryExecutionLogger();
+    const context = new ExecutionContext({
+      runId,
+      workflow: parsedWf,
+      initiatedBy: "user",
+      trigger: {
+        type: "manual",
+        receivedAt: new Date().toISOString(),
+        payload: {},
+      },
+      services: { logger },
+    });
+    activeContextRef.current = context;
+
+    // 4. Initialize nodes to pending runStatus
+    setRunSnapshot(null);
+    setExecutionLogs([]);
+    setIsBottomPanelOpen(true);
+    setActiveRightTab("inspector");
+    setNodes((prev) => prev.map((n) => ({ ...n, runStatus: "pending" })));
     setIsRunning(true);
-    // Simulate: after 4 seconds, stop
-    setTimeout(() => setIsRunning(false), 4000);
+    toast.success("Execution started");
+
+    // 5. Setup live state updates polling loop
+    pollIntervalRef.current = setInterval(() => {
+      if (!runnerRef.current) return;
+      const snapshot = runnerRef.current.getRun(runId);
+      if (snapshot) {
+        setRunSnapshot(snapshot);
+        setExecutionLogs(logger.getEntries(runId));
+        setNodes((prev) =>
+          prev.map((node) => {
+            const exec = snapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
+            return exec ? { ...node, runStatus: exec.status } : node;
+          })
+        );
+      }
+    }, 100);
+
+    try {
+      // 6. Start runner execution
+      if (!runnerRef.current) throw new Error("WorkflowRunner is not initialized");
+      const finalSnapshot = await runnerRef.current.start({
+        runId,
+        workflow: parsedWf,
+        initiatedBy: "user",
+        trigger: {
+          type: "manual",
+          receivedAt: new Date().toISOString(),
+          payload: {},
+        },
+      });
+
+      // 7. Clear polling and apply final snapshots
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      setRunSnapshot(finalSnapshot);
+      const finalLogs = logger.getEntries(runId);
+      setExecutionLogs(finalLogs);
+      setNodes((prev) =>
+        prev.map((node) => {
+          const exec = finalSnapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
+          return exec ? { ...node, runStatus: exec.status } : node;
+        })
+      );
+
+      historyServiceRef.current.add(finalSnapshot, finalLogs);
+      setHistoryList(historyServiceRef.current.getAll());
+
+      if (finalSnapshot.run.status === "completed") {
+        toast.success("Workflow completed successfully!");
+      } else if (finalSnapshot.run.status === "cancelled") {
+        toast.warning("Workflow execution stopped.");
+      } else {
+        toast.error(`Workflow execution failed: ${finalSnapshot.run.errorMessage}`);
+      }
+    } catch (err: any) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      let finalSnap = null;
+      if (runnerRef.current) {
+        finalSnap = runnerRef.current.getRun(runId);
+        if (finalSnap) setRunSnapshot(finalSnap);
+      }
+      const finalLogs = logger.getEntries(runId);
+      setExecutionLogs(finalLogs);
+      if (finalSnap) {
+        historyServiceRef.current.add(finalSnap, finalLogs);
+        setHistoryList(historyServiceRef.current.getAll());
+      }
+      toast.error(`Workflow execution crashed: ${err.message}`);
+    } finally {
+      setIsRunning(false);
+      activeContextRef.current = null;
+      activeRunIdRef.current = null;
+    }
+  }, [workflowId, workflowName, nodes, connections, bridgeExecutor]);
+
+  const handleStop = useCallback(async () => {
+    const runId = activeRunIdRef.current;
+    if (!runId) return;
+    try {
+      if (runnerRef.current) {
+        await runnerRef.current.cancel(runId);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to stop execution: ${err.message}`);
+    }
   }, []);
 
-  const handleStop = useCallback(() => setIsRunning(false), []);
+  const handleSelectHistoryRun = useCallback((entry: RunHistoryEntry) => {
+    if (replayController) {
+      replayController.destroy();
+      setReplayController(null);
+    }
+    setRunSnapshot(entry.snapshot);
+    setExecutionLogs(entry.logs);
+    setNodes((prev) =>
+      prev.map((node) => {
+        const exec = entry.snapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
+        return exec ? { ...node, runStatus: exec.status } : { ...node, runStatus: "idle" };
+      })
+    );
+    // Switch to timeline view to let them inspect
+    setActiveBottomTab("timeline");
+    setIsBottomPanelOpen(true);
+    setActiveRightTab("inspector");
+  }, [replayController]);
+
+  const handleEnterReplay = useCallback((entry: RunHistoryEntry) => {
+    const controller = new ReplayController(entry.snapshot, entry.logs, () => {
+      setReplayTick((t) => t + 1);
+    });
+    setReplayController(controller);
+    setActiveBottomTab("timeline");
+    setIsBottomPanelOpen(true);
+    setActiveRightTab("inspector");
+  }, []);
+
+  const handleExitReplay = useCallback(() => {
+    if (replayController) {
+      replayController.destroy();
+    }
+    setReplayController(null);
+  }, [replayController]);
 
   // ── Palette drag ────────────────────────────────────────────────────────────
 
@@ -382,6 +663,14 @@ export function BuilderShell({
           canRedo={canRedo}
         />
 
+        {/* Replay Debugger Controls */}
+        {replayController && (
+          <ReplayToolbar
+            controller={replayController}
+            onExitReplay={handleExitReplay}
+          />
+        )}
+
         {/* Main area: palette + canvas + properties */}
         <div className="flex flex-1 overflow-hidden">
           {/* Node palette */}
@@ -390,33 +679,193 @@ export function BuilderShell({
             onDragEnd={handlePaletteDragEnd}
           />
 
-          {/* Canvas */}
-          <Canvas
-            nodes={nodes}
-            connections={connections}
-            selectedNodeIds={selectedNodeIds}
-            viewport={viewport}
-            isRunning={isRunning}
-            onSelectNode={(id) => setSelectedNodeIds(id ? [id] : [])}
-            onMoveNode={handleMoveNode}
-            onAddNode={handleAddNode}
-            onAddConnection={handleAddConnection}
-            onDeleteConnection={handleDeleteConnection}
-            onViewportChange={setViewport}
-            onEmptyAddNode={handleEmptyAddNode}
-            pendingDropType={pendingDropType}
-            onClearPendingDrop={() => setPendingDropType(null)}
-          />
+          {/* Canvas and bottom panel container */}
+          <div className="flex-1 flex flex-col overflow-hidden relative">
+            <Canvas
+              nodes={visualNodes}
+              connections={connections}
+              selectedNodeIds={selectedNodeIds}
+              viewport={viewport}
+              isRunning={isRunning}
+              onSelectNode={(id) => setSelectedNodeIds(id ? [id] : [])}
+              onMoveNode={handleMoveNode}
+              onAddNode={handleAddNode}
+              onAddConnection={handleAddConnection}
+              onDeleteConnection={handleDeleteConnection}
+              onViewportChange={setViewport}
+              onEmptyAddNode={handleEmptyAddNode}
+              pendingDropType={pendingDropType}
+              onClearPendingDrop={() => setPendingDropType(null)}
+            />
 
-          {/* Properties panel */}
-          <PropertiesPanel
-            selectedNode={selectedNode}
-            selectionCount={selectedNodeIds.length}
-            onClose={() => setSelectedNodeIds([])}
-            onDeleteNode={handleDeleteNode}
-            onDuplicateNode={handleDuplicateNode}
-            onUpdateNode={handleUpdateNode}
-          />
+            {/* Bottom Collapsible Panel (Timeline / Logs) */}
+            <div className="flex flex-col bg-sidebar border-t border-sidebar-border transition-all duration-200 select-none">
+              {/* Header bar with tabs */}
+              <div
+                className="h-10 px-4 flex items-center justify-between hover:bg-sidebar-accent/50 cursor-pointer"
+                onClick={() => setIsBottomPanelOpen(!isBottomPanelOpen)}
+              >
+                <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab("timeline");
+                      setIsBottomPanelOpen(true);
+                    }}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer",
+                      activeBottomTab === "timeline" && isBottomPanelOpen
+                        ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Timeline
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab("logs");
+                      setIsBottomPanelOpen(true);
+                    }}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer",
+                      activeBottomTab === "logs" && isBottomPanelOpen
+                        ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Execution Logs
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveBottomTab("history");
+                      setIsBottomPanelOpen(true);
+                    }}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5",
+                      activeBottomTab === "history" && isBottomPanelOpen
+                        ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    Run History ({historyList.length})
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isBottomPanelOpen ? (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+
+              {/* Collapsible content */}
+              {isBottomPanelOpen && (
+                <div className="h-[200px] border-t border-sidebar-border overflow-hidden bg-sidebar flex flex-col">
+                  {activeBottomTab === "timeline" ? (
+                    <ExecutionTimeline snapshot={activeSnapshot} hideHeader={true} />
+                  ) : activeBottomTab === "logs" ? (
+                    <ExecutionLogsPanel logs={activeLogs} onClear={() => setExecutionLogs([])} />
+                  ) : (
+                    <RunHistoryPanel
+                      history={historyList}
+                      activeRunId={activeSnapshot?.run.id ?? null}
+                      onSelect={handleSelectHistoryRun}
+                      onReplay={handleEnterReplay}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Collapsible Panel (Config / Inspector) */}
+          <AnimatePresence mode="wait">
+            {(selectedNode || selectedNodeIds.length > 0 || activeSnapshot) && (
+              <motion.aside
+                key="right-panel"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 16 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                id="properties-panel"
+                className={cn(
+                  "w-[280px] shrink-0 flex flex-col",
+                  "bg-sidebar border-l border-sidebar-border",
+                  "overflow-hidden"
+                )}
+                aria-label="Node properties and inspector panel"
+              >
+                {/* Header with Close and Tabs */}
+                <div className="flex items-center justify-between px-4 py-2 border-b border-border/40 shrink-0 min-h-[44px]">
+                  {activeSnapshot ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiveRightTab("config")}
+                        className={cn(
+                          "text-xs font-semibold px-2 py-1 rounded transition-colors cursor-pointer",
+                          activeRightTab === "config"
+                            ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Config
+                      </button>
+                      <button
+                        onClick={() => setActiveRightTab("inspector")}
+                        className={cn(
+                          "text-xs font-semibold px-2 py-1 rounded transition-colors cursor-pointer",
+                          activeRightTab === "inspector"
+                            ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Inspector
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs font-semibold text-foreground">
+                        Node Properties
+                      </span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedNodeIds([])}
+                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    aria-label="Close panel"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {activeSnapshot && activeRightTab === "inspector" ? (
+                    <ExecutionInspectorPanel
+                      selectedNodeId={lastSelectedId}
+                      selectedNodeLabel={selectedNode ? selectedNode.label : null}
+                      selectedNodeTypeId={selectedNode ? selectedNode.typeId : null}
+                      snapshot={activeSnapshot}
+                      onClose={() => setSelectedNodeIds([])}
+                    />
+                  ) : (
+                    <PropertiesPanel
+                      selectedNode={selectedNode}
+                      selectionCount={selectedNodeIds.length}
+                      onClose={() => setSelectedNodeIds([])}
+                      onDeleteNode={handleDeleteNode}
+                      onDuplicateNode={handleDuplicateNode}
+                      onUpdateNode={handleUpdateNode}
+                      hideHeader={true}
+                    />
+                  )}
+                </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

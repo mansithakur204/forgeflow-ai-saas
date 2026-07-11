@@ -223,6 +223,11 @@ export class WorkflowRunner {
         if (this.hasUpstreamFailure(node.id, workflow, activeRun)) {
           const nodeExecution = this.getNodeExecution(activeRun, node.id);
           this.nodeRunner.skip(nodeExecution, "upstream_failure");
+          activeRun.context.services.logger.warn(
+            `Node "${node.id}" skipped due to upstream failure`,
+            undefined,
+            node.id
+          );
           continue;
         }
 
@@ -231,6 +236,11 @@ export class WorkflowRunner {
           nodeExecution.status,
           "queued",
           activeRun.run.id,
+          node.id
+        );
+        activeRun.context.services.logger.info(
+          `Node "${node.id}" queued for execution`,
+          undefined,
           node.id
         );
 
@@ -243,6 +253,11 @@ export class WorkflowRunner {
 
         let result;
         while (true) {
+          activeRun.context.services.logger.info(
+            `Node "${node.id}" (type "${node.typeId}") execution started`,
+            undefined,
+            node.id
+          );
           result = await this.nodeRunner.execute({
             context: activeRun.context,
             node,
@@ -321,6 +336,27 @@ export class WorkflowRunner {
           break;
         }
 
+        // Log node execution outcome
+        if (result.status === "completed") {
+          activeRun.context.services.logger.info(
+            `Node "${node.id}" executed successfully`,
+            { success: true },
+            node.id
+          );
+        } else if (result.status === "failed") {
+          activeRun.context.services.logger.error(
+            `Node "${node.id}" execution failed: ${result.errorMessage ?? "Unknown error"}`,
+            undefined,
+            node.id
+          );
+        } else if (result.status === "skipped") {
+          activeRun.context.services.logger.warn(
+            `Node "${node.id}" was skipped`,
+            undefined,
+            node.id
+          );
+        }
+
         if (result.status === "failed" || result.status === "retry_scheduled") {
           failedNodeId = node.id;
           activeRun.run.failedNodeId = failedNodeId;
@@ -341,9 +377,10 @@ export class WorkflowRunner {
       }
 
       this.finalizeRun(activeRun);
-      loggerInfo(activeRun, `Workflow execution finished with status "${activeRun.run.status}"`, {
-        failedNodeId,
-      });
+      activeRun.context.services.logger.info(
+        `Workflow execution finished with status "${activeRun.run.status}"`,
+        { failedNodeId, success: activeRun.run.status === "completed" }
+      );
 
       return this.buildSnapshot(activeRun);
     } catch (error) {
@@ -352,6 +389,9 @@ export class WorkflowRunner {
         activeRun.run.errorMessage =
           error instanceof Error ? error.message : String(error);
       }
+      activeRun.context.services.logger.error(
+        `Workflow execution crashed: ${activeRun.run.errorMessage}`
+      );
       this.finalizeRun(activeRun);
       return this.buildSnapshot(activeRun);
     } finally {
