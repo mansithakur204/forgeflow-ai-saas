@@ -1,0 +1,107 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Executor Registry
+// Open/closed registry for unlimited node type executors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { ExecutorError } from "@/engine/errors/executor-errors";
+import type {
+  ExecutorNodeTypeId,
+  INodeExecutor,
+  NodeExecutorMetadata,
+  ReadonlyExecutorRegistry,
+} from "@/engine/types/executor";
+import { ManualTriggerExecutor } from "@/engine/executors/trigger/manual-trigger-executor";
+import { ConditionExecutor } from "@/engine/executors/logic/condition-executor";
+import { FilterExecutor } from "@/engine/executors/logic/filter-executor";
+import { SwitchExecutor } from "@/engine/executors/logic/switch-executor";
+import { TransformExecutor } from "@/engine/executors/logic/transform-executor";
+import { HttpExecutor } from "@/engine/executors/http/http-executor";
+import { AiExecutor } from "@/engine/executors/ai/ai-executor";
+
+class ImmutableExecutorRegistryView implements ReadonlyExecutorRegistry {
+  private readonly executors: ReadonlyMap<ExecutorNodeTypeId, INodeExecutor>;
+  private readonly metadata: readonly NodeExecutorMetadata[];
+
+  constructor(executors: ReadonlyMap<ExecutorNodeTypeId, INodeExecutor>) {
+    this.executors = executors;
+    this.metadata = Object.freeze(
+      [...executors.values()].map((executor) => Object.freeze(executor.getMetadata()))
+    );
+  }
+
+  get(nodeTypeId: ExecutorNodeTypeId): INodeExecutor | undefined {
+    return this.executors.get(nodeTypeId);
+  }
+
+  has(nodeTypeId: ExecutorNodeTypeId): boolean {
+    return this.executors.has(nodeTypeId);
+  }
+
+  list(): readonly NodeExecutorMetadata[] {
+    return this.metadata;
+  }
+
+  size(): number {
+    return this.executors.size;
+  }
+}
+
+export class ExecutorRegistry {
+  private readonly executors = new Map<ExecutorNodeTypeId, INodeExecutor>();
+
+  register(executor: INodeExecutor): void {
+    const nodeTypeId = executor.getMetadata().nodeTypeId;
+    if (this.executors.has(nodeTypeId)) {
+      throw new ExecutorError(
+        "EXECUTOR_ALREADY_REGISTERED",
+        `Executor for node type "${nodeTypeId}" is already registered`,
+        { nodeTypeId }
+      );
+    }
+    this.executors.set(nodeTypeId, executor);
+  }
+
+  unregister(nodeTypeId: ExecutorNodeTypeId): boolean {
+    return this.executors.delete(nodeTypeId);
+  }
+
+  get(nodeTypeId: ExecutorNodeTypeId): INodeExecutor | undefined {
+    return this.executors.get(nodeTypeId);
+  }
+
+  has(nodeTypeId: ExecutorNodeTypeId): boolean {
+    return this.executors.has(nodeTypeId);
+  }
+
+  list(): readonly NodeExecutorMetadata[] {
+    return [...this.executors.values()].map((executor) => executor.getMetadata());
+  }
+
+  size(): number {
+    return this.executors.size;
+  }
+
+  asReadonly(): ReadonlyExecutorRegistry {
+    return new ImmutableExecutorRegistryView(this.executors);
+  }
+}
+
+export function createExecutorRegistry(executors: INodeExecutor[] = []): ExecutorRegistry {
+  const registry = new ExecutorRegistry();
+  for (const executor of executors) {
+    registry.register(executor);
+  }
+  return registry;
+}
+
+export function createDefaultExecutorRegistry(): ExecutorRegistry {
+  return createExecutorRegistry([
+    new ManualTriggerExecutor(),
+    new ConditionExecutor(),
+    new FilterExecutor(),
+    new SwitchExecutor(),
+    new TransformExecutor(),
+    new HttpExecutor(),
+    new AiExecutor(),
+  ]);
+}
