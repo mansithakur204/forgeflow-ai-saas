@@ -51,4 +51,52 @@ export * from "./runtime/tools/execution/tool-sandbox";
 export * from "./runtime/tools/execution/tool-chain-executor";
 export * from "./runtime/tools/execution/tool-execution-coordinator";
 
+// Memory System additions
+export * from "./types/memory";
+export * from "./runtime/memory/memory-provider.interface";
+export * from "./runtime/memory/memory-registry";
+export * from "./runtime/memory/memory-factory";
+export * from "./runtime/memory/memory-index";
+export * from "./runtime/memory/memory-retrieval";
+export * from "./runtime/memory/memory-compression";
+export * from "./runtime/memory/memory-managers";
+export * from "./runtime/memory/agent-memory-integration";
+
+// Planning & Reasoning System additions
+export * from "./types/reasoning";
+export * from "./runtime/planning/reasoning/goal-manager";
+export * from "./runtime/planning/reasoning/planner-registry";
+export * from "./runtime/planning/reasoning/decomposer";
+export * from "./runtime/planning/reasoning/reasoning-engine";
+export * from "./runtime/planning/reasoning/optimizer";
+export * from "./runtime/planning/reasoning/replanner";
+export * from "./runtime/planning/reasoning/planning-coordinator";
+
+// Agent Workflow System additions
+export * from "./types/workflow";
+export * from "./runtime/workflow/workflow-context";
+export * from "./runtime/workflow/task-executor";
+export * from "./runtime/workflow/workflow-coordinator";
+
+// Agent Action & Integration Layer additions
+export * from "./types/action";
+export * from "./runtime/action/adapters";
+export * from "./runtime/action/action-registry";
+export * from "./runtime/action/permission-enforcer";
+export * from "./runtime/action/action-pipeline";
+export * from "./runtime/action/integration-coordinator";
+
+// Autonomous Agent Decision Layer additions
+export * from "./types/autonomous";
+export * from "./runtime/autonomous/intent-analyzer";
+export * from "./runtime/autonomous/capability-matcher";
+export * from "./runtime/autonomous/selectors";
+export * from "./runtime/autonomous/decision-engine";
+export * from "./runtime/autonomous/autonomous-coordinator";
+
+
+
+
+
+
 

@@ -36,4 +36,11 @@ export class AgentRegistry {
   clear(): void {
     this.agents.clear();
   }
+
+  /**
+   * Lists all registered agent instances.
+   */
+  list(): IAgent[] {
+    return Array.from(this.agents.values());
+  }
 }
