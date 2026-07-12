@@ -24,3 +24,20 @@ export * from "./runtime/orchestration/shared-memory";
 export * from "./runtime/orchestration/task-queue";
 export * from "./runtime/orchestration/agent-router";
 export * from "./runtime/orchestration/agent-coordinator";
+
+// Planning & Collaboration Engine additions
+export * from "./types/planning";
+export * from "./runtime/planning/shared-planning-context";
+export * from "./runtime/planning/collaboration-graph";
+export * from "./runtime/planning/dependency-resolution";
+export * from "./runtime/planning/task-decomposition-engine";
+export * from "./runtime/planning/dynamic-task-assignment";
+export * from "./runtime/planning/agent-collaboration-planner";
+export * from "./runtime/planning/agent-handoff-manager";
+export * from "./runtime/planning/failure-recovery-strategy";
+export * from "./runtime/planning/retry-planning";
+export * from "./runtime/planning/execution-strategy-manager";
+export * from "./runtime/planning/planning-pipeline";
+export * from "./runtime/planning/planner-agent-execution-engine";
+export * from "./runtime/planning/planning-coordinator";
+
