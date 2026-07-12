@@ -523,6 +523,13 @@ export function BuilderShell({
       historyServiceRef.current.add(finalSnapshot, finalLogs);
       setHistoryList(historyServiceRef.current.getAll());
 
+      // Persist execution to server-side history (fire-and-forget)
+      if (workflowId && workflowId !== "new") {
+        fetch(`/api/workflows/${workflowId}/run`, { method: "POST" }).catch(() => {
+          // Non-critical — history logging failure doesn't affect execution
+        });
+      }
+
       if (finalSnapshot.run.status === "completed") {
         toast.success("Workflow completed successfully!");
       } else if (finalSnapshot.run.status === "cancelled") {

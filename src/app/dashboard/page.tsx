@@ -7,22 +7,31 @@ import { MetricCards } from "@/components/dashboard/metric-cards";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { ProjectsTable } from "@/components/dashboard/projects-table";
-import { MOCK_ACTIVITY, MOCK_PROJECTS } from "@/lib/dashboard-data";
 import { forgeFlowService } from "@/lib/forgeflow-service";
-import type { DashboardMetric } from "@/lib/dashboard-data";
+import type { DashboardMetric, ActivityItem, RecentProject, ActivityType } from "@/lib/dashboard-data";
 
 export const metadata = {
   title: "Dashboard — ForgeFlow AI",
   description: "Your ForgeFlow AI workspace overview and key metrics.",
 };
 
+/** Map execution history event types → dashboard ActivityType */
+function mapEventType(type: string): ActivityType {
+  if (type === "workflow_run") return "workflow";
+  if (type === "agent_run") return "agent";
+  if (type === "knowledge_upload" || type === "knowledge_delete") return "import";
+  if (type === "memory_cache_purge") return "pipeline";
+  return "workflow";
+}
+
 export default async function DashboardPage() {
-  const user = process.env.NEXT_PUBLIC_MOCK_AUTH === "true"
-    ? ({
-        firstName: "Jane",
-        emailAddresses: [{ emailAddress: "jane.doe@example.com" }],
-      } as any)
-    : await currentUser();
+  const user =
+    process.env.NEXT_PUBLIC_MOCK_AUTH === "true"
+      ? ({
+          firstName: "Jane",
+          emailAddresses: [{ emailAddress: "jane.doe@example.com" }],
+        } as any)
+      : await currentUser();
 
   if (!user) {
     redirect("/login");
@@ -33,7 +42,7 @@ export default async function DashboardPage() {
     user.emailAddresses[0]?.emailAddress?.split("@")[0] ??
     "there";
 
-  // Fetch Live Statistics from the Backend Service layer
+  // ─── Live Statistics ────────────────────────────────────────────────────────
   const memoryStats = await forgeFlowService.memorySystem.getStats();
   const docCount = (await forgeFlowService.docRepository.list()).length;
   const chunkCount = forgeFlowService.chunkRepository.getAll().length;
@@ -42,6 +51,44 @@ export default async function DashboardPage() {
   const registeredTools = forgeFlowService.toolRegistry.list().length;
   const activeExecutions = forgeFlowService.toolCoordinator.getMetrics().activeExecutions;
 
+  // ─── Execution History Stats ────────────────────────────────────────────────
+  const wfStats = forgeFlowService.executionHistory.getWorkflowRunStats();
+  const agStats = forgeFlowService.executionHistory.getAgentRunStats();
+  const totalRuns = wfStats.total + agStats.total;
+  const overallSuccessRate =
+    wfStats.total + agStats.total > 0
+      ? Math.round(
+          ((wfStats.completed + agStats.completed) /
+            (wfStats.completed + agStats.completed + wfStats.failed + agStats.failed || 1)) *
+            100
+        )
+      : 100;
+
+  // ─── Live Activity Feed ─────────────────────────────────────────────────────
+  const rawActivity = forgeFlowService.executionHistory.getActivity(20);
+  const liveActivity: ActivityItem[] = rawActivity.map((ev: import("@/lib/execution-history").ActivityEvent) => ({
+    id: ev.id,
+    type: mapEventType(ev.type),
+    title: ev.title,
+    description: ev.description,
+    timestamp: ev.timestamp,
+    status: ev.status,
+    actor: ev.actor,
+  }));
+
+  // ─── Live Projects (workflows) ──────────────────────────────────────────────
+  const liveProjects: RecentProject[] = forgeFlowService.workflows
+    .slice(0, 10)
+    .map((wf) => ({
+      id: wf.id,
+      name: wf.name,
+      status: wf.status === "active" ? "active" : wf.status === "paused" ? "paused" : wf.status === "archived" ? "archived" : "draft",
+      lastUpdated: wf.lastRun ?? wf.createdAt,
+      owner: "You",
+      workflows: wf.nodeCount,
+    }));
+
+  // ─── Metric Groups ──────────────────────────────────────────────────────────
   const knowledgeMetrics: DashboardMetric[] = [
     { id: "documents", label: "Documents", value: String(docCount), delta: "+2", trend: "up", deltaLabel: "active", iconVariant: "brand" },
     { id: "indexed_chunks", label: "Indexed Chunks", value: String(chunkCount), delta: "+3", trend: "up", deltaLabel: "parsed", iconVariant: "brand" },
@@ -51,14 +98,48 @@ export default async function DashboardPage() {
 
   const agentMetrics: DashboardMetric[] = [
     { id: "registered_agents", label: "Registered Agents", value: String(registeredAgents), delta: "+5", trend: "up", deltaLabel: "available", iconVariant: "brand" },
-    { id: "active_sessions", label: "Active Sessions", value: "1", delta: "0", trend: "neutral", deltaLabel: "running", iconVariant: "brand" },
-    { id: "running_workflows", label: "Running Workflows", value: "0", delta: "0", trend: "neutral", deltaLabel: "executing", iconVariant: "brand" },
+    { id: "active_sessions", label: "Active Sessions", value: String(activeExecutions > 0 ? 1 : 0), delta: "0", trend: "neutral", deltaLabel: "running", iconVariant: "brand" },
+    { id: "running_workflows", label: "Total Workflows", value: String(forgeFlowService.workflows.length), delta: "+1", trend: "up", deltaLabel: "saved", iconVariant: "brand" },
     { id: "active_executions", label: "Active Executions", value: String(activeExecutions), delta: "0", trend: "neutral", deltaLabel: "running", iconVariant: "brand" },
   ];
 
-  const toolMetrics: DashboardMetric[] = [
-    { id: "registered_tools", label: "Registered Tools", value: String(registeredTools), delta: "+2", trend: "up", deltaLabel: "ready", iconVariant: "brand" },
-    { id: "tool_executions", label: "Running Executions", value: String(activeExecutions), delta: "0", trend: "neutral", deltaLabel: "active", iconVariant: "brand" },
+  const executionMetrics: DashboardMetric[] = [
+    {
+      id: "total_executions",
+      label: "Total Runs",
+      value: totalRuns > 0 ? String(totalRuns) : "0",
+      delta: "+0",
+      trend: "neutral",
+      deltaLabel: "all time",
+      iconVariant: "brand",
+    },
+    {
+      id: "success_rate",
+      label: "Success Rate",
+      value: `${overallSuccessRate}%`,
+      delta: overallSuccessRate >= 90 ? "+good" : "-low",
+      trend: overallSuccessRate >= 90 ? "up" : "down",
+      deltaLabel: "of all runs",
+      iconVariant: overallSuccessRate >= 90 ? "success" : "warning",
+    },
+    {
+      id: "registered_tools",
+      label: "Registered Tools",
+      value: String(registeredTools),
+      delta: "+2",
+      trend: "up",
+      deltaLabel: "ready",
+      iconVariant: "brand",
+    },
+    {
+      id: "tool_executions",
+      label: "Avg Duration",
+      value: wfStats.avgDurationMs > 0 ? `${(wfStats.avgDurationMs / 1000).toFixed(1)}s` : "—",
+      delta: "avg",
+      trend: "neutral",
+      deltaLabel: "workflow run",
+      iconVariant: "default",
+    },
   ];
 
   const memoryMetrics: DashboardMetric[] = [
@@ -71,7 +152,7 @@ export default async function DashboardPage() {
   const systemMetrics: DashboardMetric[] = [
     { id: "build_version", label: "Build Version", value: "1.0.0", delta: "v1.0.0", trend: "neutral", deltaLabel: "build", iconVariant: "default" },
     { id: "runtime_status", label: "Runtime Status", value: "active", delta: "online", trend: "up", deltaLabel: "status", iconVariant: "success" },
-    { id: "queue_status", label: "Queue Status", value: "idle", delta: "empty", trend: "neutral", deltaLabel: "queue", iconVariant: "default" },
+    { id: "queue_status", label: "Queue Status", value: wfStats.running > 0 ? "running" : "idle", delta: String(wfStats.running), trend: "neutral", deltaLabel: "queue", iconVariant: "default" },
     { id: "health_status", label: "Health Status", value: "healthy", delta: "ok", trend: "up", deltaLabel: "health", iconVariant: "success" },
   ];
 
@@ -107,15 +188,15 @@ export default async function DashboardPage() {
             <MetricCards metrics={agentMetrics} />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-foreground mb-3">Tool Execution</h3>
-            <MetricCards metrics={toolMetrics} />
+            <h3 className="text-md font-semibold text-foreground mb-3">Execution & Tools</h3>
+            <MetricCards metrics={executionMetrics} />
           </div>
           <div>
             <h3 className="text-md font-semibold text-foreground mb-3">Memory Subsystem</h3>
             <MetricCards metrics={memoryMetrics} />
           </div>
           <div>
-            <h3 className="text-md font-semibold text-foreground mb-3">System Health & Diagnostics</h3>
+            <h3 className="text-md font-semibold text-foreground mb-3">System Health &amp; Diagnostics</h3>
             <MetricCards metrics={systemMetrics} />
           </div>
         </div>
@@ -126,7 +207,7 @@ export default async function DashboardPage() {
             <h2 id="activity-heading" className="sr-only">
               Recent activity
             </h2>
-            <RecentActivity items={MOCK_ACTIVITY} />
+            <RecentActivity items={liveActivity} />
           </section>
 
           <section aria-labelledby="quick-actions-heading" className="lg:col-span-2">
@@ -142,7 +223,7 @@ export default async function DashboardPage() {
           <h2 id="projects-heading" className="sr-only">
             Recent projects
           </h2>
-          <ProjectsTable projects={MOCK_PROJECTS} />
+          <ProjectsTable projects={liveProjects} />
         </section>
 
       </div>

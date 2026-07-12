@@ -57,6 +57,16 @@ export async function POST(request: Request) {
 
     await forgeFlowService.chunkRepository.createMany(chunkPromises);
 
+    // Log to activity feed
+    forgeFlowService.executionHistory.appendActivity({
+      type: "knowledge_upload",
+      title: `Document uploaded: ${name}`,
+      description: `${mockChunksCount} chunks indexed from ${name} (${((sizeBytes || 1024) / 1024).toFixed(1)} KB)`,
+      timestamp: new Date().toISOString(),
+      status: "completed",
+      actor: "User",
+    });
+
     return NextResponse.json({
       success: true,
       file: {
@@ -92,7 +102,17 @@ export async function DELETE(request: Request) {
     await forgeFlowService.docRepository.delete(id);
     // Delete associated chunks
     await forgeFlowService.chunkRepository.deleteByDocumentId(id);
-    
+
+    // Log to activity feed
+    forgeFlowService.executionHistory.appendActivity({
+      type: "knowledge_delete",
+      title: `Document deleted: ${doc.title}`,
+      description: `Removed document and all associated chunks from the knowledge base`,
+      timestamp: new Date().toISOString(),
+      status: "completed",
+      actor: "User",
+    });
+
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 400 });

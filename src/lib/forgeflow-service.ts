@@ -11,8 +11,9 @@ import {
   BaseTool,
 } from "@/agents";
 import { InMemoryVectorStore } from "@/knowledge/vector-store/in-memory-vector-store";
-
-import { MOCK_WORKFLOWS } from "./workflow-data";
+import { executionHistory } from "./execution-history";
+// Use the class instance type via ReturnType
+type ExecutionHistoryStore = typeof executionHistory;
 
 // Concrete repositories for Knowledge
 import type { IKnowledgeDocumentRepository, IKnowledgeSourceRepository, IChunkRepository } from "@/knowledge/repository/knowledge-repository.interface";
@@ -129,7 +130,11 @@ export class ForgeFlowService {
   public vectorStore: InMemoryVectorStore;
   public retrievalCount = 0;
 
-  public workflows = [...MOCK_WORKFLOWS];
+  /** Live execution history — workflow runs, agent runs, and activity log */
+  public executionHistory: ExecutionHistoryStore = executionHistory;
+
+  /** Live workflows list (user-created; starts empty) */
+  public workflows: import("./workflow-data").Workflow[] = [];
 
   constructor() {
     this.agentRegistry = AgentFactory.createDefaultRegistry();

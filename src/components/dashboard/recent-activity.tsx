@@ -12,6 +12,9 @@ import {
   Clock,
   Activity,
   Inbox,
+  FileText,
+  Trash2,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +36,9 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   pipeline: <Network className="w-3.5 h-3.5" />,
   error: <AlertCircle className="w-3.5 h-3.5" />,
   import: <Upload className="w-3.5 h-3.5" />,
+  knowledge_upload: <FileText className="w-3.5 h-3.5" />,
+  knowledge_delete: <Trash2 className="w-3.5 h-3.5" />,
+  memory_cache_purge: <Brain className="w-3.5 h-3.5" />,
 };
 
 const ACTIVITY_ICON_BG: Record<ActivityType, string> = {
@@ -41,6 +47,9 @@ const ACTIVITY_ICON_BG: Record<ActivityType, string> = {
   pipeline: "bg-chart-3/10 text-chart-3",
   error: "bg-destructive/10 text-destructive",
   import: "bg-chart-4/10 text-chart-4",
+  knowledge_upload: "bg-success/10 text-success",
+  knowledge_delete: "bg-destructive/10 text-destructive",
+  memory_cache_purge: "bg-warning/10 text-warning",
 };
 
 // ─── Status badge mapping ──────────────────────────────────────────────────────

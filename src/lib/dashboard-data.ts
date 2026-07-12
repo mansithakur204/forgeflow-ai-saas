@@ -27,7 +27,10 @@ export type ActivityType =
   | "agent"
   | "pipeline"
   | "error"
-  | "import";
+  | "import"
+  | "knowledge_upload"
+  | "knowledge_delete"
+  | "memory_cache_purge";
 
 export interface ActivityItem {
   id: string;

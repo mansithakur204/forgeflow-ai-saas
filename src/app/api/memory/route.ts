@@ -20,6 +20,15 @@ export async function GET() {
 export async function DELETE() {
   try {
     await forgeFlowService.memorySystem.getProvider().clear();
+    // Log to activity feed
+    forgeFlowService.executionHistory.appendActivity({
+      type: "memory_cache_purge",
+      title: "Memory cache purged",
+      description: "All working memory entries have been cleared",
+      timestamp: new Date().toISOString(),
+      status: "completed",
+      actor: "User",
+    });
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
