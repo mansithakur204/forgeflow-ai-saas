@@ -1,8 +1,8 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { BuilderShell } from "@/components/workflow-builder/builder-shell";
+import { forgeFlowService } from "@/lib/forgeflow-service";
 import {
-  MOCK_WORKFLOWS,
   MOCK_WORKFLOW_NODES,
   MOCK_CONNECTIONS,
 } from "@/lib/workflow-data";
@@ -20,7 +20,7 @@ interface WorkflowBuilderPageProps {
 
 export async function generateMetadata({ params }: WorkflowBuilderPageProps) {
   const { id } = await params;
-  const workflow = MOCK_WORKFLOWS.find((w) => w.id === id);
+  const workflow = forgeFlowService.workflows.find((w) => w.id === id);
   return {
     title: workflow
       ? `${workflow.name} — ForgeFlow AI`
@@ -43,11 +43,11 @@ export default async function WorkflowBuilderPage({
   const { id } = await params;
 
   // Resolve initial state for this workflow
-  const workflow = MOCK_WORKFLOWS.find((w) => w.id === id) ?? null;
+  const workflow = forgeFlowService.workflows.find((w) => w.id === id) ?? null;
   const isNew = id === "new";
 
-  const initialNodes = isNew ? [] : id === "wf-demo" ? MOCK_WORKFLOW_NODES : [];
-  const initialConnections = isNew ? [] : id === "wf-demo" ? MOCK_CONNECTIONS : [];
+  const initialNodes = isNew ? [] : (workflow?.nodes ?? (id === "wf-demo" ? MOCK_WORKFLOW_NODES : []));
+  const initialConnections = isNew ? [] : (workflow?.connections ?? (id === "wf-demo" ? MOCK_CONNECTIONS : []));
   const workflowName = isNew ? "Untitled Workflow" : (workflow?.name ?? "Untitled Workflow");
 
   return (

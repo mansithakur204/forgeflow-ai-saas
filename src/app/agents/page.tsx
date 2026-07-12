@@ -8,11 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AgentCard } from "@/components/agents/agent-card";
 import { mockAgents, Agent, mockProviders, mockModels } from "@/lib/agents-data";
-import { Plus, Search, Grid, List, SlidersHorizontal, RefreshCw } from "lucide-react";
+import { Plus, Search, Grid, List, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import { useRouter } from "next/navigation";
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const router = useRouter();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
   const [modelFilter, setModelFilter] = useState("all");
@@ -20,38 +25,97 @@ export default function AgentsPage() {
   const [sortBy, setSortBy] = useState("name-asc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
+  React.useEffect(() => {
+    if (isAuthLoaded && !isSignedIn) {
+      router.push("/login");
+      return;
+    }
+    if (!isSignedIn) return;
+
+    fetch("/api/agents")
+      .then((res) => res.json())
+      .then((data) => {
+        setAgents(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error("Failed to fetch registered agents");
+        setLoading(false);
+      });
+  }, [isAuthLoaded, isSignedIn, router]);
+
   // Actions
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
     const original = agents.find((a) => a.id === id);
     if (!original) return;
     
-    const duplicate: Agent = {
+    const newId = `${original.id}-copy-${Date.now()}`;
+    const duplicate = {
       ...original,
-      id: `agent-${Date.now()}`,
+      id: newId,
       name: `${original.name} Copy`,
-      runCount: 0,
-      successRate: 100.0,
-      lastRun: new Date().toISOString(),
-      version: "v1.0.0",
-      status: "paused",
     };
 
-    setAgents([duplicate, ...agents]);
-    toast.success(`Duplicated agent: ${original.name}`);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(duplicate),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to duplicate agent");
+      }
+      setAgents([{ ...original, id: newId, name: `${original.name} Copy`, runCount: 0, successRate: 100, status: "paused" }, ...agents]);
+      toast.success(`Duplicated agent: ${original.name}`);
+    } catch (err: any) {
+      toast.error(`Failed to duplicate agent: ${err.message}`);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const original = agents.find((a) => a.id === id);
-    setAgents(agents.filter((a) => a.id !== id));
-    toast.error(`Deleted agent: ${original?.name || id}`);
+    if (!confirm(`Are you sure you want to delete agent "${original?.name || id}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/agents?id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete agent");
+      }
+      setAgents(agents.filter((a) => a.id !== id));
+      toast.error(`Deleted agent: ${original?.name || id}`);
+    } catch (err: any) {
+      toast.error(`Failed to delete agent: ${err.message}`);
+    }
   };
 
-  const handleArchive = (id: string) => {
-    setAgents(
-      agents.map((a) => (a.id === id ? { ...a, status: "archived" as const } : a))
-    );
+  const handleArchive = async (id: string) => {
     const original = agents.find((a) => a.id === id);
-    toast.success(`Archived agent: ${original?.name}`);
+    try {
+      const res = await fetch("/api/agents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          status: "archived",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to archive agent");
+      }
+      setAgents(
+        agents.map((a) => (a.id === id ? { ...a, status: "archived" as const } : a))
+      );
+      toast.success(`Archived agent: ${original?.name}`);
+    } catch (err: any) {
+      toast.error(`Failed to archive agent: ${err.message}`);
+    }
   };
 
   const handleResetFilters = () => {
@@ -224,7 +288,15 @@ export default function AgentsPage() {
 
         {/* Agents Rendering */}
         <section aria-label="Agents List" className="flex-1">
-          {filteredAndSortedAgents.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed rounded-xl border-border/60 bg-card">
+              <span className="text-4xl animate-spin">🔄</span>
+              <h3 className="font-semibold text-base text-foreground mt-3">Loading Agents...</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                Retrieving live agent registries from the production engine.
+              </p>
+            </div>
+          ) : filteredAndSortedAgents.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed rounded-xl border-border/60 bg-card">
               <span className="text-4xl">🤖</span>
               <h3 className="font-semibold text-base text-foreground mt-3">No Agents Found</h3>

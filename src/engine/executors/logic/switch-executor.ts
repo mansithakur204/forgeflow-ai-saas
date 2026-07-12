@@ -63,7 +63,7 @@ export class SwitchExecutor extends BaseNodeExecutor {
   }
 
   validate(input: ExecutorValidationInput): ExecutorValidationResult {
-    if (input.node.typeId !== NODE_TYPE_ID) {
+    if ((input.node.typeId as string) !== NODE_TYPE_ID) {
       return {
         valid: false,
         errors: [

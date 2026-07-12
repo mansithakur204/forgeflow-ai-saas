@@ -122,7 +122,7 @@ export class ReplayController {
           status: "running" as const,
           completedAt: null,
           errorMessage: null,
-          outputs: null,
+          outputs: {},
         };
       }
       // Otherwise, show as pending
@@ -131,7 +131,7 @@ export class ReplayController {
         status: "pending" as const,
         startedAt: null,
         completedAt: null,
-        outputs: null,
+        outputs: {},
         errorMessage: null,
       };
     });

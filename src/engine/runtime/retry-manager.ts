@@ -26,7 +26,7 @@ export class RetryManager {
    * Resolves the retry configuration for a node, merging custom node configs with defaults.
    */
   resolveRetryOptions(node: WorkflowNode): RetryOptions {
-    const config = node.config.retry || {};
+    const config = (node.config.retry || {}) as any;
 
     const maxAttempts =
       typeof config.maxAttempts === "number"

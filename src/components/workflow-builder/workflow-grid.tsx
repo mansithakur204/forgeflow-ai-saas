@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,7 @@ import {
   MoreHorizontal,
   Plus,
   ArrowRight,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,8 +87,28 @@ interface WorkflowCardProps {
 }
 
 function WorkflowCard({ workflow, index }: WorkflowCardProps) {
+  const router = useRouter();
   const status = STATUS_CONFIG[workflow.status];
   const StatusIcon = status.icon;
+
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete workflow "${workflow.name}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/workflows?id=${workflow.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete workflow");
+      }
+      toast.error(`Deleted workflow: ${workflow.name}`);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(`Failed to delete workflow: ${err.message}`);
+    }
+  };
 
   return (
     <motion.article
@@ -170,8 +193,9 @@ function WorkflowCard({ workflow, index }: WorkflowCardProps) {
             <DropdownMenuItem
               variant="destructive"
               className="gap-2 cursor-pointer text-xs"
+              onClick={handleDelete}
             >
-              <Archive className="w-3.5 h-3.5" /> Archive
+              <Trash2 className="w-3.5 h-3.5" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

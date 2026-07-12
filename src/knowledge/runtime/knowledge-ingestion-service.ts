@@ -11,7 +11,8 @@ import type {
 import { DocumentStateManager } from "../state/document-state-manager";
 import { DocumentVersioning } from "../state/document-versioning";
 import { ProcessingQueue } from "../queue/processing-queue";
-import type { ChunkingOptions, SupportedParserFormat } from "../chunker/chunker.interface";
+import type { ChunkingOptions } from "../chunker/chunker.interface";
+import type { SupportedParserFormat } from "../parser/parser.interface";
 import type { IngestionJob, IngestionStats } from "../types/ingestion";
 import {
   ParserNotFoundError,

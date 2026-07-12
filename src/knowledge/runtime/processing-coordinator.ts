@@ -4,7 +4,8 @@ import type { ParserRegistry } from "../parser/parser-registry";
 import type { ChunkerRegistry } from "../chunker/chunker-registry";
 import { DocumentStateManager } from "../state/document-state-manager";
 import type { IChunkRepository, IKnowledgeDocumentRepository } from "../repository/knowledge-repository.interface";
-import type { ChunkingOptions, SupportedParserFormat } from "../chunker/chunker.interface";
+import type { ChunkingOptions } from "../chunker/chunker.interface";
+import type { SupportedParserFormat } from "../parser/parser.interface";
 import {
   ParserNotFoundError,
   ParserExecutionError,

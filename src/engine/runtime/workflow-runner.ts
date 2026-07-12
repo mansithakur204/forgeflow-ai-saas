@@ -357,7 +357,7 @@ export class WorkflowRunner {
           );
         }
 
-        if (result.status === "failed" || result.status === "retry_scheduled") {
+        if (result.status === "failed") {
           failedNodeId = node.id;
           activeRun.run.failedNodeId = failedNodeId;
           activeRun.run.errorMessage = result.errorMessage;

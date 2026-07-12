@@ -34,6 +34,7 @@ import {
   Trash2,
   CheckCircle,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -42,10 +43,10 @@ type TabId = "overview" | "prompt" | "memory" | "tools" | "runs" | "analytics" |
 export default function AgentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
 
-  // Load target agent from mock data, default to agent-1 if not found
-  const initialAgent = mockAgents.find((a) => a.id === id) || mockAgents[0];
-  const [agent, setAgent] = useState<Agent>(initialAgent);
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   // Tab details layout
@@ -63,37 +64,144 @@ export default function AgentDetailsPage({ params }: { params: Promise<{ id: str
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   // Settings State variables
-  const [settingsName, setSettingsName] = useState(agent.name);
-  const [settingsDesc, setSettingsDesc] = useState(agent.description);
-  const [settingsTemp, setSettingsTemp] = useState(agent.temperature);
-  const [settingsTopP, setSettingsTopP] = useState(agent.topP);
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsDesc, setSettingsDesc] = useState("");
+  const [settingsTemp, setSettingsTemp] = useState(0.2);
+  const [settingsTopP, setSettingsTopP] = useState(0.95);
 
-  const handleUpdateSettings = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    if (isAuthLoaded && !isSignedIn) {
+      router.push("/login");
+      return;
+    }
+    if (!isSignedIn) return;
+
+    fetch("/api/agents")
+      .then((res) => res.json())
+      .then((data: Agent[]) => {
+        const found = data.find((a) => a.id === id);
+        if (found) {
+          setAgent(found);
+          setSettingsName(found.name);
+          setSettingsDesc(found.description);
+          setSettingsTemp(found.temperature);
+          setSettingsTopP(found.topP);
+        } else {
+          // Fallback to mock if not found in registered agents
+          const fallback = mockAgents.find((a) => a.id === id) || mockAgents[0];
+          setAgent(fallback);
+          setSettingsName(fallback.name);
+          setSettingsDesc(fallback.description);
+          setSettingsTemp(fallback.temperature);
+          setSettingsTopP(fallback.topP);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load agent details", err);
+        // Fallback to mock on error
+        const fallback = mockAgents.find((a) => a.id === id) || mockAgents[0];
+        setAgent(fallback);
+        setSettingsName(fallback.name);
+        setSettingsDesc(fallback.description);
+        setSettingsTemp(fallback.temperature);
+        setSettingsTopP(fallback.topP);
+        setLoading(false);
+      });
+  }, [id, isAuthLoaded, isSignedIn, router]);
+
+  const handleUpdateSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAgent((prev) => ({
-      ...prev,
-      name: settingsName,
-      description: settingsDesc,
-      temperature: settingsTemp,
-      topP: settingsTopP,
-    }));
-    toast.success("Agent settings successfully saved.");
+    if (!agent) return;
+    try {
+      const res = await fetch("/api/agents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: agent.id,
+          name: settingsName,
+          description: settingsDesc,
+          temperature: settingsTemp,
+          topP: settingsTopP,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update settings");
+      }
+      setAgent((prev) => prev ? {
+        ...prev,
+        name: settingsName,
+        description: settingsDesc,
+        temperature: settingsTemp,
+        topP: settingsTopP,
+      } : null);
+      toast.success("Agent settings successfully saved.");
+    } catch (err: any) {
+      toast.error(`Failed to update settings: ${err.message}`);
+    }
   };
 
-  const handleArchiveAgent = () => {
-    setAgent((prev) => ({
-      ...prev,
-      status: "archived" as const,
-    }));
-    toast.warning(`Agent "${agent.name}" has been archived.`);
+  const handleArchiveAgent = async () => {
+    if (!agent) return;
+    try {
+      const res = await fetch("/api/agents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: agent.id,
+          status: "archived",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to archive agent");
+      }
+      setAgent((prev) => prev ? {
+        ...prev,
+        status: "archived" as const,
+      } : null);
+      toast.warning(`Agent "${settingsName || agent.name}" has been archived.`);
+    } catch (err: any) {
+      toast.error(`Failed to archive agent: ${err.message}`);
+    }
   };
 
-  const handleDeleteAgent = () => {
-    toast.error(`Deleted agent: ${agent.name}`);
-    setTimeout(() => {
-      router.push("/agents");
-    }, 800);
+  const handleDeleteAgent = async () => {
+    if (!agent) return;
+    if (!confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/agents?id=${agent.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete agent");
+      }
+      toast.error(`Deleted agent: ${settingsName || agent.name}`);
+      setTimeout(() => {
+        router.push("/agents");
+      }, 800);
+    } catch (err: any) {
+      toast.error(`Failed to delete agent: ${err.message}`);
+    }
   };
+
+  if (loading || !agent) {
+    return (
+      <RootLayoutShell>
+        <div className="flex flex-col gap-6 p-4 md:p-6 max-w-screen-xl mx-auto h-full">
+          <div className="flex flex-col gap-2 animate-pulse">
+            <div className="h-4 w-32 bg-muted rounded" />
+            <div className="h-8 w-64 bg-muted rounded mt-2" />
+          </div>
+          <div className="h-96 bg-muted rounded-xl mt-6 animate-pulse" />
+        </div>
+      </RootLayoutShell>
+    );
+  }
 
   return (
     <RootLayoutShell>
@@ -102,19 +210,23 @@ export default function AgentDetailsPage({ params }: { params: Promise<{ id: str
         <AgentHeader
           agent={agent}
           onDelete={handleDeleteAgent}
-          onStatusChange={(status) => setAgent((prev) => ({ ...prev, status }))}
+          onStatusChange={(status) => setAgent((prev) => prev ? { ...prev, status } : null)}
         />
 
         {/* Horizontal Navigation Tabs */}
         <div className="border-b border-border/40 overflow-x-auto shrink-0 pb-px">
-          <div className="flex gap-6 min-w-max">
+          <div className="flex gap-6 min-w-max" role="tablist" aria-label="Agent options tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                id={`tab-${tab.id}`}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`tab-panel-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "py-2.5 text-xs font-semibold border-b-2 tracking-wide transition-all leading-none",
+                  "py-2.5 text-xs font-semibold border-b-2 tracking-wide transition-all leading-none outline-none focus-visible:text-brand-500",
                   activeTab === tab.id
                     ? "border-brand-500 text-brand-500 font-bold"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:border-border/60"
@@ -223,11 +335,31 @@ export default function AgentDetailsPage({ params }: { params: Promise<{ id: str
                         ...tool,
                         enabled: agent.tools.includes(tool.id)
                       }}
-                      onToggle={(id, checked) => {
+                      onToggle={async (toolId, checked) => {
                         const updatedTools = checked 
-                          ? [...agent.tools, id] 
-                          : agent.tools.filter((t) => t !== id);
-                        setAgent((prev) => ({ ...prev, tools: updatedTools }));
+                          ? [...agent.tools, toolId] 
+                          : agent.tools.filter((t) => t !== toolId);
+                        try {
+                          const res = await fetch("/api/agents", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: agent.id,
+                              tools: updatedTools,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok || !data.success) {
+                            throw new Error(data.error || "Failed to update tools");
+                          }
+                          setAgent((prev) => {
+                            if (!prev) return null;
+                            return { ...prev, tools: updatedTools };
+                          });
+                          toast.success(checked ? `Attached tool: ${toolId}` : `Detached tool: ${toolId}`);
+                        } catch (err: any) {
+                          toast.error(`Failed to update tools: ${err.message}`);
+                        }
                       }}
                     />
                   ))}

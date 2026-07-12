@@ -61,6 +61,7 @@ export default function ForgotPasswordPage() {
   
   const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
   // Call useSignIn conditionally/safely to prevent errors when ClerkProvider is unmounted
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const clerkSignIn = isMock ? { signIn: null, fetchStatus: undefined } : useSignIn();
   const { signIn, fetchStatus } = clerkSignIn;
 

@@ -34,6 +34,8 @@ export interface Workflow {
   lastRun: string | null;
   createdAt: string;
   tags: string[];
+  nodes?: CanvasNode[];
+  connections?: NodeConnection[];
 }
 
 // ─── Canvas Node Types ─────────────────────────────────────────────────────────

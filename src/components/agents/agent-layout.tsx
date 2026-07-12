@@ -62,7 +62,7 @@ export function AgentHeader({ agent, onRun, onDelete, onStatusChange }: AgentHea
         </Button>
 
         {onDelete && (
-          <Button variant="outline" size="sm" onClick={onDelete} className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+          <Button variant="outline" size="sm" onClick={onDelete} aria-label="Delete agent" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
             <Trash2 className="w-4 h-4" />
           </Button>
         )}

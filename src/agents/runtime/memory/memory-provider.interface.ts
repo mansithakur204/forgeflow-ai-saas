@@ -14,6 +14,7 @@ export interface IMemoryProvider {
   clear(): Promise<void>;
   getStats(): Promise<MemoryStatistics>;
   getDiagnostics(): Promise<MemoryDiagnostics>;
+  listEntries(): Promise<MemoryEntry[]>;
 }
 
 export class InMemoryMemoryProvider implements IMemoryProvider {
@@ -134,5 +135,9 @@ export class InMemoryMemoryProvider implements IMemoryProvider {
       uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
       isHealthy: true,
     };
+  }
+
+  async listEntries(): Promise<MemoryEntry[]> {
+    return Array.from(this.storeMap.values()).map((entry) => ({ ...entry }));
   }
 }

@@ -116,20 +116,17 @@ export function Topbar() {
 
         {/* Right actions */}
         <div className="ml-auto flex items-center gap-1 md:gap-2">
-          {/* Notifications */}
+          {/* Notifications (Disabled / Coming Soon) */}
           <Tooltip>
             <TooltipTrigger
               id="notifications-button"
-              className="relative cursor-pointer p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
-              aria-label="Notifications"
+              disabled
+              className="relative cursor-not-allowed opacity-35 p-2 rounded-lg text-muted-foreground"
+              aria-label="Notifications (Coming soon)"
             >
               <Bell className="w-4 h-4" aria-hidden="true" />
-              <span
-                className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-brand-500"
-                aria-hidden="true"
-              />
             </TooltipTrigger>
-            <TooltipContent>Notifications</TooltipContent>
+            <TooltipContent>Notifications (Coming soon)</TooltipContent>
           </Tooltip>
 
           {/* Theme toggle */}
@@ -188,17 +185,20 @@ export function Topbar() {
               <DropdownMenuSeparator />
 
               <DropdownMenuGroup>
-                <DropdownMenuItem id="user-menu-profile" className="cursor-pointer gap-2.5">
+                <DropdownMenuItem id="user-menu-profile" disabled className="gap-2.5 opacity-55">
                   <User className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  Profile
+                  <span>Profile</span>
+                  <span className="ml-auto text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wide">Soon</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem id="user-menu-settings" className="cursor-pointer gap-2.5">
+                <DropdownMenuItem id="user-menu-settings" disabled className="gap-2.5 opacity-55">
                   <Settings className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  Settings
+                  <span>Settings</span>
+                  <span className="ml-auto text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wide">Soon</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem id="user-menu-billing" className="cursor-pointer gap-2.5">
+                <DropdownMenuItem id="user-menu-billing" disabled className="gap-2.5 opacity-55">
                   <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  Billing
+                  <span>Billing</span>
+                  <span className="ml-auto text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wide">Soon</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 

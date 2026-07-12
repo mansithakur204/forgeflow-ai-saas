@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X, Zap, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navGroups } from "@/config/nav";
+import { siteConfig } from "@/config/site";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -64,27 +65,11 @@ function NavContent({
           <ul className="flex flex-col gap-0.5" role="list">
             {group.items.map((item) => {
               const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
+                !item.disabled && (pathname === item.href || pathname.startsWith(item.href + "/"));
               const Icon = item.icon;
 
-              const navLink = (
-                <Link
-                  href={item.href}
-                  target={item.external ? "_blank" : undefined}
-                  rel={item.external ? "noopener noreferrer" : undefined}
-                  onClick={onNavigate}
-                  aria-current={isActive ? "page" : undefined}
-                  className={cn(
-                    "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
-                    "transition-all duration-150 outline-none",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive
-                      ? "bg-sidebar-primary/10 text-sidebar-primary"
-                      : "text-sidebar-foreground/70",
-                    collapsed && "justify-center px-0 py-2.5"
-                  )}
-                >
+              const navContent = (
+                <>
                   {/* Active indicator */}
                   {isActive && (
                     <motion.span
@@ -99,7 +84,11 @@ function NavContent({
                     className={cn(
                       "shrink-0 transition-colors",
                       collapsed ? "w-5 h-5" : "w-4 h-4",
-                      isActive ? "text-sidebar-primary" : "text-muted-foreground"
+                      item.disabled
+                        ? "text-muted-foreground/30"
+                        : isActive
+                        ? "text-sidebar-primary"
+                        : "text-muted-foreground"
                     )}
                     aria-hidden="true"
                   />
@@ -118,7 +107,7 @@ function NavContent({
                     )}
                   </AnimatePresence>
 
-                  {!collapsed && item.badge && (
+                  {!collapsed && item.badge && !item.disabled && (
                     <Badge
                       variant="secondary"
                       className="ml-auto text-[10px] py-0 h-4 px-1.5 bg-brand-500/15 text-brand-500 border-0"
@@ -126,6 +115,47 @@ function NavContent({
                       {item.badge}
                     </Badge>
                   )}
+
+                  {!collapsed && item.disabled && (
+                    <span className="ml-auto text-[9px] text-muted-foreground/40 font-medium uppercase tracking-wide">
+                      Soon
+                    </span>
+                  )}
+                </>
+              );
+
+              const navLink = item.disabled ? (
+                <span
+                  className={cn(
+                    "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                    "transition-all duration-150 outline-none select-none",
+                    "opacity-40 cursor-not-allowed",
+                    collapsed && "justify-center px-0 py-2.5"
+                  )}
+                  aria-disabled="true"
+                  role="link"
+                >
+                  {navContent}
+                </span>
+              ) : (
+                <Link
+                  href={item.href}
+                  target={item.external ? "_blank" : undefined}
+                  rel={item.external ? "noopener noreferrer" : undefined}
+                  onClick={onNavigate}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                    "transition-all duration-150 outline-none",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isActive
+                      ? "bg-sidebar-primary/10 text-sidebar-primary"
+                      : "text-sidebar-foreground/70",
+                    collapsed && "justify-center px-0 py-2.5"
+                  )}
+                >
+                  {navContent}
                 </Link>
               );
 
@@ -136,7 +166,10 @@ function NavContent({
                       <TooltipTrigger render={<span />}>{navLink}</TooltipTrigger>
                       <TooltipContent side="right" className="font-medium">
                         {item.title}
-                        {item.badge && (
+                        {item.disabled && (
+                          <span className="ml-1.5 text-muted-foreground/60">(Coming soon)</span>
+                        )}
+                        {item.badge && !item.disabled && (
                           <span className="ml-1.5 text-brand-400">({item.badge})</span>
                         )}
                       </TooltipContent>
@@ -276,7 +309,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         {/* Footer branding */}
         <div className="px-4 py-3 border-t border-border/40">
           <p className="text-xs text-muted-foreground/50 font-medium">
-            ForgeFlow AI <span className="opacity-60">v0.1.0</span>
+            ForgeFlow AI <span className="opacity-60">v{siteConfig.version}</span>
           </p>
         </div>
       </SheetContent>

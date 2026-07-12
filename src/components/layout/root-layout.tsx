@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { siteConfig } from "@/config/site";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForgeFlow AI — Root Layout Shell
@@ -74,18 +75,30 @@ export function RootLayoutShell({ children }: RootLayoutShellProps) {
         >
           <span>
             ForgeFlow AI{" "}
-            <span className="text-muted-foreground/60">v0.1.0</span>
+            <span className="text-muted-foreground/60">v{siteConfig.version}</span>
           </span>
           <nav aria-label="Footer links" className="flex items-center gap-4">
-            <a href="#" className="hover:text-foreground transition-colors focus-visible:outline-ring">
+            <span
+              className="text-muted-foreground/40 cursor-not-allowed select-none"
+              title="Coming soon"
+              aria-disabled="true"
+            >
               Privacy
-            </a>
-            <a href="#" className="hover:text-foreground transition-colors focus-visible:outline-ring">
+            </span>
+            <span
+              className="text-muted-foreground/40 cursor-not-allowed select-none"
+              title="Coming soon"
+              aria-disabled="true"
+            >
               Terms
-            </a>
-            <a href="#" className="hover:text-foreground transition-colors focus-visible:outline-ring">
+            </span>
+            <span
+              className="text-muted-foreground/40 cursor-not-allowed select-none"
+              title="Coming soon"
+              aria-disabled="true"
+            >
               Status
-            </a>
+            </span>
           </nav>
         </footer>
       </div>

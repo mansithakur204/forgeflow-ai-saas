@@ -15,6 +15,8 @@ interface QuickAction {
   title: string;
   description: string;
   href: string;
+  /** If true, renders as non-interactive — route does not exist yet */
+  disabled?: boolean;
   /** Tailwind classes for the icon wrapper */
   iconBg: string;
   /** Tailwind classes for the icon color */
@@ -50,6 +52,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     title: "Create Pipeline",
     description: "Connect data sources, transformers, and destinations.",
     href: "/pipelines/new",
+    disabled: true,
     iconBg: "bg-chart-3/10",
     iconColor: "text-chart-3",
     hoverGlow: "hover:shadow-chart-3/10",
@@ -60,6 +63,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     title: "Import Project",
     description: "Import an existing project from GitHub or a ZIP archive.",
     href: "/projects/import",
+    disabled: true,
     iconBg: "bg-chart-4/10",
     iconColor: "text-chart-4",
     hoverGlow: "hover:shadow-chart-4/10",
@@ -95,6 +99,45 @@ export function QuickActionsSkeleton() {
 // ─── Action Card ───────────────────────────────────────────────────────────────
 
 function ActionCard({ action }: { action: QuickAction }) {
+  if (action.disabled) {
+    return (
+      <div
+        className={cn(
+          "group block rounded-xl border border-border/40 bg-card/50 p-5",
+          "opacity-50 cursor-not-allowed select-none",
+        )}
+        aria-disabled="true"
+        title={`${action.title} — Coming soon`}
+      >
+        {/* Icon */}
+        <div
+          className={cn(
+            "w-10 h-10 rounded-lg flex items-center justify-center mb-4",
+            action.iconBg,
+            action.iconColor
+          )}
+        >
+          {action.icon}
+        </div>
+
+        {/* Text */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-foreground">
+              {action.title}
+            </h3>
+            <span className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wide border border-border/40 rounded px-1.5 py-0.5">
+              Soon
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {action.description}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <a
       href={action.href}

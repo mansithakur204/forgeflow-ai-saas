@@ -1,4 +1,5 @@
 import type { SourceItem } from "../types/connector";
+export type { SourceItem };
 
 export interface SourceProviderMetadata {
   id: string;

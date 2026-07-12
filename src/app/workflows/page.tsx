@@ -3,10 +3,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RootLayoutShell } from "@/components/layout/root-layout";
 import { PageHeader } from "@/components/common/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { WorkflowGrid } from "@/components/workflow-builder/workflow-grid";
-import { MOCK_WORKFLOWS } from "@/lib/workflow-data";
+import { forgeFlowService } from "@/lib/forgeflow-service";
 import { Plus } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +51,7 @@ export default async function WorkflowsPage() {
           <h2 id="workflows-heading" className="sr-only">
             All workflows
           </h2>
-          <WorkflowGrid workflows={MOCK_WORKFLOWS} />
+          <WorkflowGrid workflows={forgeFlowService.workflows} />
         </section>
 
       </div>

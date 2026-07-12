@@ -119,11 +119,12 @@ export function BuilderToolbar({
 
   const handleSave = useCallback(async () => {
     setSaveState("saving");
-    onSave();
-    // Simulate async save
-    await new Promise((r) => setTimeout(r, 800));
-    setSaveState("saved");
-    setTimeout(() => setSaveState("saved"), 2000);
+    try {
+      await onSave();
+      setSaveState("saved");
+    } catch {
+      setSaveState("unsaved");
+    }
   }, [onSave]);
 
   const zoomPercent = Math.round(viewport.zoom * 100);

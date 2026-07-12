@@ -42,15 +42,18 @@ export class MockLLMProvider extends BaseLLMProvider {
   /**
    * Helper implementing AsyncIterable stream simulation.
    */
-  async *generateStream(
+  async generateStream(
     messages: LLMMessage[],
     options?: CompletionOptions
-  ): AsyncIterable<string> {
+  ): Promise<AsyncIterable<string>> {
     const response = await this.generateCompletion(messages, options);
     const chunks = response.text.split(" ");
-    for (const chunk of chunks) {
-      yield chunk + " ";
-      await new Promise((resolve) => setTimeout(resolve, 5));
+    async function* stream() {
+      for (const chunk of chunks) {
+        yield chunk + " ";
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
     }
+    return stream();
   }
 }

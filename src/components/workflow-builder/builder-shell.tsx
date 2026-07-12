@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   type CanvasNode,
@@ -602,6 +602,36 @@ export function BuilderShell({
     setReplayController(null);
   }, [replayController]);
 
+  const handleSaveWorkflow = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workflows", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: workflowId,
+          name: workflowName,
+          description: nodes.length > 0 ? `Custom workflow with ${nodes.length} nodes.` : "Custom AI workflow.",
+          status: "active",
+          nodeCount: nodes.length,
+          runCount: 0,
+          lastRun: new Date().toISOString(),
+          tags: ["User-Created"],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Save failed");
+      }
+      toast.success("Workflow saved successfully!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Failed to save workflow: ${err.message}`);
+      throw err;
+    }
+  }, [workflowId, workflowName, nodes]);
+
   // ── Palette drag ────────────────────────────────────────────────────────────
 
   const handlePaletteDragStart = useCallback((def: NodeTypeDefinition) => {
@@ -658,7 +688,7 @@ export function BuilderShell({
           onFitToScreen={handleFitToScreen}
           onUndo={handleUndo}
           onRedo={handleRedo}
-          onSave={() => { /* mock */ }}
+          onSave={handleSaveWorkflow}
           canUndo={canUndo}
           canRedo={canRedo}
         />

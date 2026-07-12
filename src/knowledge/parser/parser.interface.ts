@@ -1,8 +1,10 @@
 import type { DocumentMetadata } from "../types/document";
+import type { ParserDiagnostics } from "./parser-result";
 
 export interface ParsedDocument {
   content: string;
   metadata: Partial<DocumentMetadata>;
+  diagnostics?: ParserDiagnostics;
 }
 
 export type SupportedParserFormat = "pdf" | "docx" | "txt" | "markdown" | "csv";

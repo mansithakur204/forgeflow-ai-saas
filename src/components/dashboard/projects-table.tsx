@@ -112,7 +112,7 @@ function ProjectsTableEmpty() {
           title="No projects yet"
           description="Create your first project to start building AI workflows."
           action={
-            <Button variant="brand" size="sm" className="cursor-pointer gap-2">
+            <Button variant="brand" size="sm" disabled className="gap-2 opacity-50 cursor-not-allowed" title="Projects are coming soon">
               <Plus className="w-4 h-4" aria-hidden="true" />
               New Project
             </Button>
@@ -195,14 +195,11 @@ function ProjectRow({ project }: { project: RecentProject }) {
       {/* Open action */}
       <td className="py-3">
         <button
-          className={cn(
-            "p-1.5 rounded-md transition-all duration-150 cursor-pointer",
-            "text-muted-foreground hover:text-brand-500 hover:bg-brand-500/10",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            hovered ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          )}
-          aria-label={`Open ${project.name}`}
-          tabIndex={0}
+          disabled
+          className="p-1.5 rounded-md text-muted-foreground opacity-30 cursor-not-allowed"
+          aria-label={`Open ${project.name} (Coming soon)`}
+          title="Coming soon"
+          tabIndex={-1}
         >
           <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
@@ -230,7 +227,9 @@ export function ProjectsTable({ projects, loading = false }: ProjectsTableProps)
           <Button
             variant="outline"
             size="sm"
-            className="cursor-pointer text-xs gap-1.5"
+            disabled
+            className="text-xs gap-1.5 opacity-50 cursor-not-allowed"
+            title="Projects are coming soon"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             New Project

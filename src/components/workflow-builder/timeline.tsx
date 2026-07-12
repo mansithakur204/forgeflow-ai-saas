@@ -62,7 +62,7 @@ export function ExecutionTimeline({
   const totalNodes = nodeExecutions.length;
   const successNodes = nodeExecutions.filter((n) => n.status === "completed").length;
   const failedNodes = nodeExecutions.filter((n) => n.status === "failed").length;
-  const cancelledNodes = nodeExecutions.filter((n) => n.status === "cancelled" || n.status === "skipped").length;
+  const cancelledNodes = nodeExecutions.filter((n) => n.status === "skipped").length;
 
   // Calculate Workflow duration
   let workflowDuration = 0;

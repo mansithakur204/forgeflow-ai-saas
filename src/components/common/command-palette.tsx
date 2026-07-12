@@ -4,11 +4,12 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard,
   Search,
   ArrowRight,
   Clock,
   Zap,
+  Bot,
+  GitBranch,
 } from "lucide-react";
 import {
   Command,
@@ -29,32 +30,31 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
-const recentItems = [
-  { id: "r1", label: "Production Workflow", href: "/workflows/prod" },
-  { id: "r2", label: "GPT-4 Agent Config", href: "/agents/gpt4" },
-  { id: "r3", label: "Analytics Report", href: "/analytics" },
-];
-
-const quickActions = [
-  {
-    id: "a1",
-    label: "New Workflow",
-    shortcut: "N W",
-    icon: Zap,
-    action: () => console.log("New workflow"),
-  },
-  {
-    id: "a2",
-    label: "New Agent",
-    shortcut: "N A",
-    icon: Zap,
-    action: () => console.log("New agent"),
-  },
-];
+// No hard-coded recent items — avoids dead links to non-existent routes.
+// In the future this can be populated from user history stored in state/API.
+const recentItems: { id: string; label: string; href: string }[] = [];
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+
+  // Quick actions wired to router navigation
+  const quickActions = [
+    {
+      id: "a1",
+      label: "New Workflow",
+      shortcut: "N W",
+      icon: GitBranch,
+      action: () => { router.push("/workflows/new"); onClose(); },
+    },
+    {
+      id: "a2",
+      label: "New Agent",
+      shortcut: "N A",
+      icon: Bot,
+      action: () => { router.push("/agents/new"); onClose(); },
+    },
+  ];
 
   // Reset search on close
   useEffect(() => {
@@ -135,23 +135,25 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
                   <CommandSeparator className="my-2" />
 
-                  {/* Recent */}
-                  <CommandGroup heading="Recent">
-                    {recentItems.map((item) => (
-                      <CommandItem
-                        key={item.id}
-                        value={item.label}
-                        onSelect={() => handleNavigation(item.href)}
-                        className="flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                        </div>
-                        <span className="text-sm">{item.label}</span>
-                        <ArrowRight className="ml-auto w-3.5 h-3.5 text-muted-foreground/40" />
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                  {/* Recent — only shown when there are real history items */}
+                  {recentItems.length > 0 && (
+                    <CommandGroup heading="Recent">
+                      {recentItems.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={item.label}
+                          onSelect={() => handleNavigation(item.href)}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          </div>
+                          <span className="text-sm">{item.label}</span>
+                          <ArrowRight className="ml-auto w-3.5 h-3.5 text-muted-foreground/40" />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
 
                   <CommandSeparator className="my-2" />
 

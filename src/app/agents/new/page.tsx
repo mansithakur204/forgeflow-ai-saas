@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RootLayoutShell } from "@/components/layout/root-layout";
+import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,28 @@ const COLORS = [
 
 export default function CreateAgentWizard() {
   const router = useRouter();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    if (isAuthLoaded && !isSignedIn) {
+      router.push("/login");
+    }
+  }, [isAuthLoaded, isSignedIn, router]);
+
+  if (!isAuthLoaded || !isSignedIn) {
+    return (
+      <RootLayoutShell>
+        <div className="flex flex-col gap-6 p-4 md:p-6 max-w-screen-xl mx-auto h-full">
+          <div className="flex flex-col gap-2 animate-pulse">
+            <div className="h-4 w-32 bg-muted rounded" />
+            <div className="h-8 w-64 bg-muted rounded mt-2" />
+          </div>
+          <div className="h-96 bg-muted rounded-xl mt-6 animate-pulse" />
+        </div>
+      </RootLayoutShell>
+    );
+  }
 
   // Form State
   const [name, setName] = useState("");
@@ -129,17 +151,32 @@ export default function CreateAgentWizard() {
     setStep((s) => s - 1);
   };
 
-  const handleCreateAgent = () => {
+  const handleCreateAgent = async () => {
     if (!validateStep(1) || !validateStep(2)) {
       setStep(1);
       return;
     }
 
     toast.success("Creating agent configuration...");
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: name.toLowerCase().replace(/\s+/g, "-"),
+          name,
+          description,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to register agent");
+      }
       toast.success(`Agent "${name}" successfully deployed!`);
       router.push("/agents");
-    }, 1000);
+    } catch (err: any) {
+      toast.error(`Failed to deploy agent: ${err.message}`);
+    }
   };
 
   const wizardSteps = [

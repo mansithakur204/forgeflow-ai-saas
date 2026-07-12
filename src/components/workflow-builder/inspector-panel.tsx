@@ -38,7 +38,7 @@ export function ExecutionInspectorPanel({
   }
 
   // Resolve node definition
-  const nodeDef = selectedNodeTypeId ? getNodeType(selectedNodeTypeId) : null;
+  const nodeDef = selectedNodeTypeId ? getNodeType(selectedNodeTypeId as import("@/lib/workflow-data").NodeTypeId) : null;
 
   // Resolve execution records
   const execution = snapshot?.nodeExecutions.find((e) => e.nodeId === selectedNodeId);

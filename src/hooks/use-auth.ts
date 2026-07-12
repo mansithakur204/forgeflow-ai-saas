@@ -31,9 +31,11 @@ export interface AuthState {
 
 export function useAuth(): AuthState {
   const isMock = process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
-  
-  // Call Clerk hooks conditionally/safely to prevent errors when ClerkProvider is not mounted
+
+  // Call Clerk hooks conditionally/safely to prevent errors when ClerkProvider is not mounted (mock mode)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const clerkUser = isMock ? { isLoaded: false, isSignedIn: false, user: null } : useUser();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const clerkObj = isMock ? { signOut: null } : useClerk();
   const router = useRouter();
 

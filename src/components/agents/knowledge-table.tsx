@@ -22,10 +22,25 @@ interface KnowledgeTableProps {
   initialFiles?: UploadedFile[];
 }
 
-export function KnowledgeTable({ initialFiles = mockFiles }: KnowledgeTableProps) {
-  const [files, setFiles] = useState<UploadedFile[]>(initialFiles);
+export function KnowledgeTable({ initialFiles }: KnowledgeTableProps = {}) {
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/knowledge")
+      .then((res) => res.json())
+      .then((data) => {
+        setFiles(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error("Failed to load knowledge files");
+        setLoading(false);
+      });
+  }, []);
 
   // File type icon resolver
   const getFileIcon = (fileName: string) => {
@@ -45,58 +60,29 @@ export function KnowledgeTable({ initialFiles = mockFiles }: KnowledgeTableProps
     setIsDragging(false);
   };
 
-  const simulateUploading = (fileName: string, fileSize: number) => {
+  const uploadRealFile = async (fileName: string, fileSize: number) => {
     setIsUploading(true);
-    const mockId = `file-${Date.now()}`;
-    const formattedSize =
-      fileSize > 1024 * 1024
-        ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
-        : `${(fileSize / 1024).toFixed(0)} KB`;
-
-    // 1. Add file in processing state
-    const newFileRecord: UploadedFile = {
-      id: mockId,
-      name: fileName,
-      size: formattedSize,
-      chunks: 0,
-      embeddings: 0,
-      status: "processing",
-      uploadedAt: new Date().toISOString(),
-    };
-
-    setFiles((prev) => [newFileRecord, ...prev]);
-    toast.success(`Uploading ${fileName}...`);
-
-    // 2. Simulate chunks and embedding creation
-    setTimeout(() => {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === mockId
-            ? {
-                ...f,
-                chunks: Math.floor(Math.random() * 80) + 10,
-                status: "processing",
-              }
-            : f
-        )
-      );
-
-      setTimeout(() => {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === mockId
-              ? {
-                  ...f,
-                  embeddings: f.chunks,
-                  status: "embedded",
-                }
-              : f
-          )
-        );
-        setIsUploading(false);
-        toast.success(`Successfully vectorized ${fileName}!`);
-      }, 1500);
-    }, 1200);
+    toast.success(`Uploading and parsing ${fileName}...`);
+    try {
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fileName,
+          sizeBytes: fileSize,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Ingestion failed");
+      }
+      setFiles((prev) => [data.file, ...prev]);
+      setIsUploading(false);
+      toast.success(`Successfully vectorized and embedded ${fileName}!`);
+    } catch (err: any) {
+      toast.error(`Ingestion failed: ${err.message}`);
+      setIsUploading(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -113,20 +99,31 @@ export function KnowledgeTable({ initialFiles = mockFiles }: KnowledgeTableProps
         return;
       }
       
-      simulateUploading(file.name, file.size);
+      uploadRealFile(file.name, file.size);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      simulateUploading(file.name, file.size);
+      uploadRealFile(file.name, file.size);
     }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    setFiles(files.filter((f) => f.id !== id));
-    toast.error(`Removed ${name} from Knowledge Base.`);
+  const handleDelete = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/knowledge?id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to remove document");
+      }
+      setFiles(files.filter((f) => f.id !== id));
+      toast.error(`Removed ${name} from Knowledge Base.`);
+    } catch (err: any) {
+      toast.error(`Failed to remove document: ${err.message}`);
+    }
   };
 
   return (

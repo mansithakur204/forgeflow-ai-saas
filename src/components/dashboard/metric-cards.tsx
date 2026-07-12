@@ -6,6 +6,19 @@ import {
   BarChart3,
   CheckCircle,
   Zap,
+  FileText,
+  Layers,
+  Cpu,
+  Search,
+  Database,
+  History,
+  Brain,
+  Bookmark,
+  Info,
+  Activity,
+  GitBranch,
+  ShieldCheck,
+  Settings,
 } from "lucide-react";
 import { StatCard, StatCardGrid } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,6 +39,34 @@ const METRIC_ICONS: Record<string, React.ReactNode> = {
   api_requests: <BarChart3 aria-hidden="true" />,
   success_rate: <CheckCircle aria-hidden="true" />,
   total_executions: <Zap aria-hidden="true" />,
+
+  // Knowledge
+  documents: <FileText aria-hidden="true" />,
+  indexed_chunks: <Layers aria-hidden="true" />,
+  embeddings: <Cpu aria-hidden="true" />,
+  retrieval_count: <Search aria-hidden="true" />,
+
+  // Agents
+  registered_agents: <Bot aria-hidden="true" />,
+  active_sessions: <Activity aria-hidden="true" />,
+  running_workflows: <GitBranch aria-hidden="true" />,
+  active_executions: <Play aria-hidden="true" />,
+
+  // Tools
+  registered_tools: <Settings aria-hidden="true" />,
+  tool_executions: <Zap aria-hidden="true" />,
+
+  // Memory
+  working_memory: <Database aria-hidden="true" />,
+  long_term_memory: <History aria-hidden="true" />,
+  semantic_memory: <Brain aria-hidden="true" />,
+  episodic_memory: <Bookmark aria-hidden="true" />,
+
+  // System
+  build_version: <Info aria-hidden="true" />,
+  runtime_status: <Activity aria-hidden="true" />,
+  queue_status: <Layers aria-hidden="true" />,
+  health_status: <ShieldCheck aria-hidden="true" />,
 };
 
 // ─── Loading Skeleton ──────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { siteConfig } from "@/config/site";
 import { motion } from "framer-motion";
 import { Zap, ArrowRight, CheckCircle2, GitBranch, Bot, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -132,14 +134,18 @@ export default function Home() {
               </CustomCardHeader>
 
               <CustomCardContent className="flex flex-wrap gap-3 relative">
-                <Button variant="glow" size="lg" className="gap-2">
-                  <Zap className="w-4 h-4" />
-                  Start Building
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-                <Button variant="glass" size="lg">
-                  View Documentation
-                </Button>
+                <Link href="/dashboard" passHref>
+                  <Button variant="glow" size="lg" className="gap-2 cursor-pointer">
+                    <Zap className="w-4 h-4" />
+                    Start Building
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+                <a href={siteConfig.links.docs} target="_blank" rel="noopener noreferrer">
+                  <Button variant="glass" size="lg" className="cursor-pointer">
+                    View Documentation
+                  </Button>
+                </a>
               </CustomCardContent>
             </CustomCard>
           </motion.div>
