@@ -41,3 +41,14 @@ export * from "./runtime/planning/planning-pipeline";
 export * from "./runtime/planning/planner-agent-execution-engine";
 export * from "./runtime/planning/planning-coordinator";
 
+// Tool Execution Engine additions
+export * from "./types/tool-execution";
+export * from "./runtime/tools/execution/tool-discovery";
+export * from "./runtime/tools/execution/tool-permission-validator";
+export * from "./runtime/tools/execution/parameter-resolver";
+export * from "./runtime/tools/execution/tool-middleware";
+export * from "./runtime/tools/execution/tool-sandbox";
+export * from "./runtime/tools/execution/tool-chain-executor";
+export * from "./runtime/tools/execution/tool-execution-coordinator";
+
+

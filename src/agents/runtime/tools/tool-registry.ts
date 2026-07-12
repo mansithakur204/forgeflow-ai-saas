@@ -36,4 +36,11 @@ export class ToolRegistry {
   clear(): void {
     this.tools.clear();
   }
+
+  /**
+   * Returns list of all registered tools.
+   */
+  list(): ITool[] {
+    return Array.from(this.tools.values());
+  }
 }
