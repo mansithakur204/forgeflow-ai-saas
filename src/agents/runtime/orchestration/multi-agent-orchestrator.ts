@@ -2,6 +2,7 @@
 // ForgeFlow AI — Multi-Agent Orchestrator
 // Coordinates the sequential/collaboration flow across Planner, Research,
 // Tool, Memory, and Reviewer agents via a central orchestration engine.
+// Supports dependency-aware parallel execution.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { AgentRegistry } from "../agent-registry";
@@ -13,10 +14,10 @@ import type {
   OrchestratorContext,
   OrchestratorResult,
   OrchestratorState,
-  AgentTask,
 } from "../../types/orchestration";
-import type { AgentSession } from "../../types/session";
 import type { HandoffRequest } from "../../types/planning";
+import { ParallelExecutionScheduler } from "./parallel-execution-scheduler";
+import type { ExecutionBranch, ExecutionBarrier, SynchronizationContext } from "../../types/parallel";
 
 export class MultiAgentOrchestrator {
   private registry: AgentRegistry;
@@ -25,6 +26,7 @@ export class MultiAgentOrchestrator {
   private config: OrchestratorConfiguration;
 
   private currentContext?: OrchestratorContext;
+  private activeSyncContext?: SynchronizationContext;
   private isPaused = false;
   private isCancelled = false;
 
@@ -87,36 +89,99 @@ export class MultiAgentOrchestrator {
       const planOutput = await this.executeAgentStep("planner-agent", goal, sharedContext, logger);
       logger.info(`Orchestration completed Agent: planner-agent`, { event: "AGENT_COMPLETED", agentId: "planner-agent" });
 
-      // 2. Research Step (Research Agent)
-      this.checkCancellation();
-      await this.yieldIfPaused(logger);
-      context.currentState = "researching";
-      context.currentAgentId = "research-agent";
-      context.currentStepIndex = 2;
-      context.progress = 35;
+      let executionVariables: Record<string, unknown> = { planOutput };
 
-      // Handoff Planner -> Research (Task 15.1B Flow)
-      await this.dispatchHandoff("planner-agent", "research-agent", "task-research", { planOutput }, sharedContext, correlationId);
+      // Check if parallel execution branch flow is enabled (Task 15.2B/C)
+      if (this.config.parallelExecutionEnabled) {
+        this.checkCancellation();
+        await this.yieldIfPaused(logger);
 
-      logger.info(`Orchestration starting Agent: research-agent`, { event: "AGENT_STARTED", agentId: "research-agent" });
-      const researchOutput = await this.executeAgentStep("research-agent", `Research resources for: ${goal}`, sharedContext, logger);
-      logger.info(`Orchestration completed Agent: research-agent`, { event: "AGENT_COMPLETED", agentId: "research-agent" });
+        // Transition State Machine states
+        context.currentState = "researching"; // Set to researching initially
+        context.currentAgentId = "parallel-branches";
+        context.currentStepIndex = 2;
+        context.progress = 40;
 
-      // 3. Tool Step (Tool Agent)
-      this.checkCancellation();
-      await this.yieldIfPaused(logger);
-      context.currentState = "executing_tools";
-      context.currentAgentId = "tool-agent";
-      context.currentStepIndex = 3;
-      context.progress = 55;
+        const scheduler = new ParallelExecutionScheduler(logger);
+        
+        // Define two independent execution branches with a join point barrier
+        const activeBranches: ExecutionBranch[] = [
+          { branchId: "branch-research", taskIds: ["task-research"], status: "pending" },
+          { branchId: "branch-tools", taskIds: ["task-tools"], status: "pending" },
+        ];
 
-      // Handoff Research -> Tool
-      await this.dispatchHandoff("research-agent", "tool-agent", "task-tools", { researchOutput }, sharedContext, correlationId);
+        // Define a barrier requiring both branches to finish before merging context
+        const barriers: ExecutionBarrier[] = [
+          {
+            barrierId: "barrier-join",
+            dependencyBranchIds: ["branch-research", "branch-tools"],
+            satisfiedBranchIds: [],
+            isSatisfied: false,
+          }
+        ];
 
-      logger.info(`Orchestration starting Agent: tool-agent`, { event: "AGENT_STARTED", agentId: "tool-agent" });
-      const toolPayload = JSON.stringify({ toolId: "io_http", config: { method: "GET", url: "https://httpbin.org/get" } });
-      const toolOutput = await this.executeAgentStep("tool-agent", toolPayload, sharedContext, logger);
-      logger.info(`Orchestration completed Agent: tool-agent`, { event: "AGENT_COMPLETED", agentId: "tool-agent" });
+        const syncContext: SynchronizationContext = {
+          syncId: `sync-${orchestrationId}`,
+          activeBranches,
+          barriers,
+          variables: { goal, planOutput },
+        };
+
+        this.activeSyncContext = syncContext;
+
+        const mergedVars = await scheduler.execute(syncContext, async (branchId, vars) => {
+          if (branchId === "branch-research") {
+            // Handoff to Research
+            await this.dispatchHandoff("planner-agent", "research-agent", "task-research", vars, sharedContext, correlationId);
+            const researchOutput = await this.executeAgentStep("research-agent", `Research resources for: ${goal}`, sharedContext, logger);
+            return { researchOutput };
+          } else {
+            // Handoff to Tool
+            await this.dispatchHandoff("planner-agent", "tool-agent", "task-tools", vars, sharedContext, correlationId);
+            const toolPayload = JSON.stringify({ toolId: "io_http", config: { method: "GET", url: "https://httpbin.org/get" } });
+            const toolOutput = await this.executeAgentStep("tool-agent", toolPayload, sharedContext, logger);
+            return { toolOutput };
+          }
+        }, 15000, this.config.maxRetries);
+
+        executionVariables = { ...executionVariables, ...mergedVars };
+
+      } else {
+        // Fallback to sequential flow (Planner -> Research -> Tool)
+        // 2. Research Step (Research Agent)
+        this.checkCancellation();
+        await this.yieldIfPaused(logger);
+        context.currentState = "researching";
+        context.currentAgentId = "research-agent";
+        context.currentStepIndex = 2;
+        context.progress = 35;
+
+        // Handoff Planner -> Research (Task 15.1B Flow)
+        await this.dispatchHandoff("planner-agent", "research-agent", "task-research", { planOutput }, sharedContext, correlationId);
+
+        logger.info(`Orchestration starting Agent: research-agent`, { event: "AGENT_STARTED", agentId: "research-agent" });
+        const researchOutput = await this.executeAgentStep("research-agent", `Research resources for: ${goal}`, sharedContext, logger);
+        logger.info(`Orchestration completed Agent: research-agent`, { event: "AGENT_COMPLETED", agentId: "research-agent" });
+
+        // 3. Tool Step (Tool Agent)
+        this.checkCancellation();
+        await this.yieldIfPaused(logger);
+        context.currentState = "executing_tools";
+        context.currentAgentId = "tool-agent";
+        context.currentStepIndex = 3;
+        context.progress = 55;
+
+        // Handoff Research -> Tool
+        await this.dispatchHandoff("research-agent", "tool-agent", "task-tools", { researchOutput }, sharedContext, correlationId);
+
+        logger.info(`Orchestration starting Agent: tool-agent`, { event: "AGENT_STARTED", agentId: "tool-agent" });
+        const toolPayload = JSON.stringify({ toolId: "io_http", config: { method: "GET", url: "https://httpbin.org/get" } });
+        const toolOutput = await this.executeAgentStep("tool-agent", toolPayload, sharedContext, logger);
+        logger.info(`Orchestration completed Agent: tool-agent`, { event: "AGENT_COMPLETED", agentId: "tool-agent" });
+
+        executionVariables.researchOutput = researchOutput;
+        executionVariables.toolOutput = toolOutput;
+      }
 
       // 4. Memory Step (Memory Agent)
       this.checkCancellation();
@@ -127,12 +192,21 @@ export class MultiAgentOrchestrator {
       context.progress = 75;
 
       // Handoff Tool -> Memory
-      await this.dispatchHandoff("tool-agent", "memory-agent", "task-memory", { toolOutput }, sharedContext, correlationId);
+      await this.dispatchHandoff(
+        this.config.parallelExecutionEnabled ? "tool-agent" : "tool-agent",
+        "memory-agent",
+        "task-memory",
+        executionVariables,
+        sharedContext,
+        correlationId
+      );
 
       logger.info(`Orchestration starting Agent: memory-agent`, { event: "AGENT_STARTED", agentId: "memory-agent" });
       const memoryPayload = JSON.stringify({ type: "create", scope: "global", key: `goal_${orchestrationId}`, value: goal });
       const memoryOutput = await this.executeAgentStep("memory-agent", memoryPayload, sharedContext, logger);
       logger.info(`Orchestration completed Agent: memory-agent`, { event: "AGENT_COMPLETED", agentId: "memory-agent" });
+
+      executionVariables.memoryOutput = memoryOutput;
 
       // 5. Reviewer Step (Reviewer Agent)
       this.checkCancellation();
@@ -143,7 +217,7 @@ export class MultiAgentOrchestrator {
       context.progress = 95;
 
       // Handoff Memory -> Reviewer
-      await this.dispatchHandoff("memory-agent", "reviewer-agent", "task-review", { memoryOutput }, sharedContext, correlationId);
+      await this.dispatchHandoff("memory-agent", "reviewer-agent", "task-review", executionVariables, sharedContext, correlationId);
 
       logger.info(`Orchestration starting Agent: reviewer-agent`, { event: "AGENT_STARTED", agentId: "reviewer-agent" });
       const reviewPayload = JSON.stringify({ id: orchestrationId, planId: orchestrationId, tasks: [] });
@@ -228,10 +302,14 @@ export class MultiAgentOrchestrator {
   }
 
   /**
-   * Task 15.1F: Expose Context for Execution Inspector
+   * Task 15.1F & Task 15.2F: Expose Context and Synchronization for Execution Inspector
    */
   getContext(): OrchestratorContext | undefined {
     return this.currentContext;
+  }
+
+  getActiveSynchronizationContext(): SynchronizationContext | undefined {
+    return this.activeSyncContext;
   }
 
   private checkCancellation(): void {
