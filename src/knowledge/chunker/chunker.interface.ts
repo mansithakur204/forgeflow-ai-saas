@@ -1,6 +1,6 @@
 import type { Chunk } from "../types/document";
 
-export type ChunkingStrategyType = "fixed-size" | "semantic" | "recursive" | "markdown-aware";
+export type ChunkingStrategyType = "fixed-size" | "semantic" | "recursive" | "markdown-aware" | "paragraph" | "sentence" | "html-sections";
 
 export interface ChunkingOptions {
   strategy: ChunkingStrategyType;

@@ -17,6 +17,18 @@ import { SwitchExecutor } from "@/engine/executors/logic/switch-executor";
 import { TransformExecutor } from "@/engine/executors/logic/transform-executor";
 import { HttpExecutor } from "@/engine/executors/http/http-executor";
 import { AiExecutor } from "@/engine/executors/ai/ai-executor";
+import { AgentNodeExecutor } from "@/engine/executors/ai/agent-executor";
+import { DatabaseExecutor } from "@/engine/executors/database/database-executor";
+import { EmailExecutor } from "@/engine/executors/email/email-executor";
+import { SlackExecutor } from "@/engine/executors/slack/slack-executor";
+import { DiscordExecutor } from "@/engine/executors/discord/discord-executor";
+import { NotionExecutor } from "@/engine/executors/notion/notion-executor";
+import { GoogleSheetsExecutor } from "@/engine/executors/sheets/google-sheets-executor";
+import {
+  WebhookTriggerExecutor,
+  ScheduleTriggerExecutor,
+  AiClassifierExecutor,
+} from "@/engine/executors/stub-executors";
 
 class ImmutableExecutorRegistryView implements ReadonlyExecutorRegistry {
   private readonly executors: ReadonlyMap<ExecutorNodeTypeId, INodeExecutor>;
@@ -96,12 +108,26 @@ export function createExecutorRegistry(executors: INodeExecutor[] = []): Executo
 
 export function createDefaultExecutorRegistry(): ExecutorRegistry {
   return createExecutorRegistry([
+    // Trigger executors
     new ManualTriggerExecutor(),
+    new WebhookTriggerExecutor(),
+    new ScheduleTriggerExecutor(),
+    // AI executors
+    new AiExecutor(),
+    new AgentNodeExecutor(),
+    new AiClassifierExecutor(),
+    // Logic executors
     new ConditionExecutor(),
     new FilterExecutor(),
     new SwitchExecutor(),
     new TransformExecutor(),
+    // I/O executors
     new HttpExecutor(),
-    new AiExecutor(),
+    new DatabaseExecutor(),
+    new EmailExecutor(),
+    new SlackExecutor(),
+    new DiscordExecutor(),
+    new NotionExecutor(),
+    new GoogleSheetsExecutor(),
   ]);
 }

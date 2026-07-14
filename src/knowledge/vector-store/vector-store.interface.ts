@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Vector Store Interface & Types
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface VectorRecord {
   id: string;
   documentId: string;
@@ -15,6 +19,15 @@ export interface VectorStoreStats {
   dimension: number;
 }
 
+export type SimilarityMetric = "cosine" | "dot-product" | "euclidean";
+
+export interface VectorStoreCapabilities {
+  supportedMetrics: SimilarityMetric[];
+  supportsBatching: boolean;
+  supportsNamespaces: boolean;
+  supportsFiltering: boolean;
+}
+
 export interface VectorSearchOptions {
   vector?: number[];
   text?: string;
@@ -23,15 +36,22 @@ export interface VectorSearchOptions {
   limit?: number;
   offset?: number;
   minScore?: number;
+  metric?: SimilarityMetric;
   metadataFilter?: Record<string, unknown>;
 }
 
 export interface VectorSearchResult {
   record: VectorRecord;
-  score: number; // Normalized similarity mapped to [0, 1]
+  score: number; // Normalized score in [0, 1]
+  distance?: number;
 }
 
 export interface IVectorStore {
+  /**
+   * Returns capabilities of this vector store provider.
+   */
+  getCapabilities(): VectorStoreCapabilities;
+
   /**
    * Inserts a record. Validates vector dimension.
    */

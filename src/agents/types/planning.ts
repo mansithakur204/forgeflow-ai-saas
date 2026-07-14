@@ -43,3 +43,39 @@ export interface HandoffResult {
   transferredData: Record<string, unknown>;
   error?: string;
 }
+
+// ── Planner Agent Domain Typings ──────────────────────────────────────────────
+
+export type PlanningStatus =
+  | "idle"
+  | "analyzing"
+  | "decomposing"
+  | "generating"
+  | "completed"
+  | "failed";
+
+export interface PlannerConfiguration {
+  maxTasks?: number;
+  allowParallelExecution?: boolean;
+  strategyType?: ExecutionStrategyType;
+  defaultMaxRetries?: number;
+}
+
+export interface PlanningContext {
+  goal: string;
+  variables: Record<string, unknown>;
+  constraints: string[];
+  successCriteria: string[];
+  priority: "low" | "medium" | "high" | "critical";
+  planningStatus: PlanningStatus;
+}
+
+export interface AgentPlanningResult {
+  planId: string;
+  plan: ExecutionPlan;
+  goalAnalyzed: boolean;
+  detectedIntent: string;
+  detectedCategory: string;
+  success: boolean;
+  error?: string;
+}

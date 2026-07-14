@@ -39,6 +39,7 @@ interface CanvasProps {
   isRunning: boolean;
   onSelectNode: (nodeId: string | null) => void;
   onMoveNode: (nodeId: string, dx: number, dy: number) => void;
+  onMoveNodeEnd?: (nodeId: string) => void;
   onAddNode: (typeId: NodeTypeId, position: { x: number; y: number }) => void;
   onAddConnection: (conn: Omit<NodeConnection, "id">) => void;
   onDeleteConnection: (connId: string) => void;
@@ -80,6 +81,7 @@ export function Canvas({
   isRunning,
   onSelectNode,
   onMoveNode,
+  onMoveNodeEnd,
   onAddNode,
   onAddConnection,
   onDeleteConnection,
@@ -157,6 +159,18 @@ export function Canvas({
     if (draftConn) {
       setDraftConn(null);
     }
+  }, [draftConn]);
+
+  // Cancel draft connection on Escape key
+  useEffect(() => {
+    if (!draftConn) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDraftConn(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [draftConn]);
 
   // ── Wheel zoom ──────────────────────────────────────────────────────────────
@@ -308,12 +322,13 @@ export function Canvas({
       >
         {/* ── SVG connection overlay ─────────────────────────────────────── */}
         <svg
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0"
+          style={{ pointerEvents: "none" }}
           width="4000"
           height="4000"
           aria-hidden="true"
         >
-          {/* Existing connections */}
+          {/* Existing connections — each ConnectionLine has its own pointer-events */}
           {connections.map((conn) => {
             const positions = getConnectionPositions(conn);
             if (!positions) return null;
@@ -324,7 +339,7 @@ export function Canvas({
                 fromPos={positions.from}
                 toPos={positions.to}
                 isSelected={false}
-                isAnimated={isRunning && (conn.fromNodeId === "node-1" || conn.fromNodeId === "node-2")}
+                isAnimated={isRunning}
                 onDelete={onDeleteConnection}
               />
             );
@@ -368,6 +383,7 @@ export function Canvas({
               zoom={viewport.zoom}
               onSelect={onSelectNode}
               onMove={onMoveNode}
+              onMoveEnd={onMoveNodeEnd || (() => {})}
               onStartConnection={handleStartConnection}
               onEndConnection={handleEndConnection}
             />

@@ -60,6 +60,7 @@ interface WorkflowNodeProps {
   zoom: number;
   onSelect: (nodeId: string) => void;
   onMove: (nodeId: string, dx: number, dy: number) => void;
+  onMoveEnd: (nodeId: string) => void;
   onStartConnection: (nodeId: string, portId: string, isOutput: boolean) => void;
   onEndConnection: (nodeId: string, portId: string) => void;
 }
@@ -70,6 +71,7 @@ export const WorkflowNode = memo(function WorkflowNode({
   zoom,
   onSelect,
   onMove,
+  onMoveEnd,
   onStartConnection,
   onEndConnection,
 }: WorkflowNodeProps) {
@@ -106,10 +108,15 @@ export const WorkflowNode = memo(function WorkflowNode({
       };
 
       const handlePointerUp = () => {
+        const wasDragging = isDragging.current;
         dragOrigin.current = null;
         isDragging.current = false;
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
+        // Push undo-history snapshot when a drag completes
+        if (wasDragging) {
+          onMoveEnd(node.id);
+        }
       };
 
       window.addEventListener("pointermove", handlePointerMove);
@@ -207,6 +214,10 @@ export const WorkflowNode = memo(function WorkflowNode({
                 )}
                 aria-label={`Input port: ${port.label}`}
                 onPointerDown={(e) => {
+                  // Don't let the canvas think this is a node drag or deselect
+                  e.stopPropagation();
+                }}
+                onPointerUp={(e) => {
                   e.stopPropagation();
                   onEndConnection(node.id, port.id);
                 }}

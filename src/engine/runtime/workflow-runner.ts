@@ -6,7 +6,8 @@
 import { ExecutionContext } from "@/engine/context/execution-context";
 import { RuntimeError } from "@/engine/errors/runtime-errors";
 import { validateWorkflowGraph } from "@/engine/graph/validate-graph";
-import { InMemoryExecutionLogger } from "@/engine/logging/in-memory-logger";
+import { TimelineCollector } from "@/engine/logging/timeline-collector";
+import { timelineService } from "@/engine/logging/timeline-service";
 import { ExecutionQueue } from "@/engine/queue/execution-queue";
 import { resolveExecutionOrder } from "@/engine/runtime/execution-order";
 import { NodeRunner } from "@/engine/runtime/node-runner";
@@ -78,7 +79,7 @@ export class WorkflowRunner {
       );
     }
 
-    const logger = new InMemoryExecutionLogger();
+    const logger = new TimelineCollector(input.workflow.id, timelineService);
     const context = new ExecutionContext({
       runId: input.runId,
       workflow: input.workflow,
@@ -282,11 +283,12 @@ export class WorkflowRunner {
               !activeRun.control.stopRequested
             ) {
               const delayMs = this.retryManager.calculateDelay(node, nodeExecution.attempt);
-              loggerInfo(
-                activeRun,
+              activeRun.context.services.logger.info(
                 `Node "${node.id}" (type "${node.typeId}") execution failed with retryable error. Scheduling retry attempt ${
                   nodeExecution.attempt + 1
-                } in ${delayMs}ms. Error: ${result.errorMessage}`
+                } in ${delayMs}ms. Error: ${result.errorMessage}`,
+                { event: node.typeId === "ai_llm" ? "AI_RETRY" : "CUSTOM_EVENT", attempt: nodeExecution.attempt + 1, delayMs },
+                node.id
               );
 
               try {
@@ -306,7 +308,11 @@ export class WorkflowRunner {
                 );
                 continue;
               } catch (retryDelayError) {
-                loggerInfo(activeRun, `Retry delay for node "${node.id}" was cancelled`);
+                activeRun.context.services.logger.info(
+                  `Retry delay for node "${node.id}" was cancelled`,
+                  undefined,
+                  node.id
+                );
                 const finalStatus = (activeRun.control.cancelRequested || activeRun.control.stopRequested)
                   ? "skipped"
                   : "failed";
@@ -336,23 +342,23 @@ export class WorkflowRunner {
           break;
         }
 
-        // Log node execution outcome
+        // Log node execution outcome with duration metadata
         if (result.status === "completed") {
           activeRun.context.services.logger.info(
             `Node "${node.id}" executed successfully`,
-            { success: true },
+            { success: true, durationMs: result.durationMs, nodeTypeId: node.typeId },
             node.id
           );
         } else if (result.status === "failed") {
           activeRun.context.services.logger.error(
             `Node "${node.id}" execution failed: ${result.errorMessage ?? "Unknown error"}`,
-            undefined,
+            { durationMs: result.durationMs, nodeTypeId: node.typeId },
             node.id
           );
         } else if (result.status === "skipped") {
           activeRun.context.services.logger.warn(
             `Node "${node.id}" was skipped`,
-            undefined,
+            { nodeTypeId: node.typeId },
             node.id
           );
         }
@@ -377,9 +383,12 @@ export class WorkflowRunner {
       }
 
       this.finalizeRun(activeRun);
+      const workflowDurationMs = activeRun.run.startedAt && activeRun.run.completedAt
+        ? Date.parse(activeRun.run.completedAt) - Date.parse(activeRun.run.startedAt)
+        : 0;
       activeRun.context.services.logger.info(
         `Workflow execution finished with status "${activeRun.run.status}"`,
-        { failedNodeId, success: activeRun.run.status === "completed" }
+        { failedNodeId, success: activeRun.run.status === "completed", durationMs: workflowDurationMs }
       );
 
       return this.buildSnapshot(activeRun);

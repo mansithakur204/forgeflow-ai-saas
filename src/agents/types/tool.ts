@@ -48,3 +48,32 @@ export interface ToolDiagnostics {
   retriesAttempted: number;
   dataTransferredBytes: number;
 }
+
+// ── Tool Agent Domain Typings ────────────────────────────────────────────────
+
+export type ToolExecutionStatus =
+  | "idle"
+  | "validating"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface ToolConfiguration {
+  allowedTools?: string[];
+  deniedTools?: string[];
+  requireApproval?: boolean;
+  timeoutMs?: number;
+  maxMemoryBytes?: number;
+}
+
+export interface ToolExecutionResult {
+  toolId: string;
+  success: boolean;
+  output: string;
+  error?: string;
+  durationMs: number;
+  retries: number;
+  executorUsed: string;
+  status: ToolExecutionStatus;
+}

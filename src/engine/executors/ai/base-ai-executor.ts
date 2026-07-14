@@ -16,6 +16,13 @@ import type {
   NodeExecutorMetadata,
 } from "@/engine/types/executor";
 
+import { forgeFlowService } from "@/lib/forgeflow-service";
+import { EmbeddingFactory } from "@/knowledge/embedding/embedding-factory";
+import { MockLLMProvider } from "@/knowledge/llm/mock-llm-provider";
+import { RetrievalPipeline } from "@/knowledge/retrieval/retrieval-pipeline";
+import { ContextBuilder } from "@/knowledge/retrieval/context-builder";
+import { PromptComposer } from "@/knowledge/prompt/prompt-composer";
+
 export interface AiExecutorConfig {
   model: string;
   prompt: string;
@@ -132,6 +139,8 @@ export abstract class BaseAiExecutor extends BaseNodeExecutor {
       totalTokens: number;
     };
     raw: unknown;
+    metrics?: any;
+    events?: any;
   }>;
 
   protected async run(input: ExecutorExecutionInput): Promise<ExecutorExecutionResult> {
@@ -171,22 +180,272 @@ export abstract class BaseAiExecutor extends BaseNodeExecutor {
       ? this.renderPrompt(systemPrompt, input.context, resolvedInputs)
       : undefined;
 
+    input.context.services.logger.info(
+      `AI request started (model: ${config.model})`,
+      { event: "AI_REQUEST_STARTED", model: config.model },
+      input.node.id
+    );
+
+    const knowledgeEnabled = !!input.node.config.knowledgeEnabled;
+    const knowledgeCollection = input.node.config.knowledgeCollectionId ? String(input.node.config.knowledgeCollectionId) : undefined;
+    const topK = input.node.config.topK !== undefined ? Number(input.node.config.topK) : 5;
+    const similarityThreshold = input.node.config.similarityThreshold !== undefined ? Number(input.node.config.similarityThreshold) : 0.0;
+    const maxContextTokens = input.node.config.maxContextTokens !== undefined ? Number(input.node.config.maxContextTokens) : 2000;
+    const searchStrategy = input.node.config.searchStrategy ? String(input.node.config.searchStrategy) : "cosine";
+    const citationVisibility = input.node.config.citationVisibility !== false;
+
+    const memoryEnabled = !!input.node.config.memoryEnabled;
+    const executionMode = input.node.config.executionMode
+      ? String(input.node.config.executionMode)
+      : (memoryEnabled ? "memory" : (knowledgeEnabled ? "knowledge" : "standard"));
+
+    const memoryTypes = Array.isArray(input.node.config.memoryTypes)
+      ? input.node.config.memoryTypes
+      : ["working", "conversation", "long-term", "semantic"];
+
+    const maxMemories = input.node.config.maxMemories !== undefined ? Number(input.node.config.maxMemories) : 5;
+    const importanceThreshold = input.node.config.importanceThreshold !== undefined ? Number(input.node.config.importanceThreshold) : 0.0;
+    const recencyBias = input.node.config.recencyBias !== undefined ? Number(input.node.config.recencyBias) : 0.25;
+    const confidenceThreshold = input.node.config.confidenceThreshold !== undefined ? Number(input.node.config.confidenceThreshold) : 0.0;
+    const memoryScope = input.node.config.memoryScope ? String(input.node.config.memoryScope) : "workflow";
+
     try {
-      const response = await this.callModel(config, renderedPrompt, renderedSystemPrompt, input.signal);
-      return successResult(
-        {
-          out: response.text,
-          err: null,
-        },
-        {
-          model: config.model,
-          promptTokens: response.usage?.promptTokens ?? 0,
-          completionTokens: response.usage?.completionTokens ?? 0,
-          totalTokens: response.usage?.totalTokens ?? 0,
-          rawResponse: response.raw,
-        }
-      );
+      if (executionMode === "memory") {
+        input.context.services.logger.info(
+          `Memory search started`,
+          { event: "MEMORY_SEARCH_STARTED", scope: memoryScope },
+          input.node.id
+        );
+
+        const filters = {
+          conversationId: String(
+            input.context.getVariable("sessionId") ||
+            input.context.getVariable("conversationId") ||
+            input.context.runId ||
+            "default-session"
+          ),
+          memoryTypes: memoryTypes as any[],
+          minImportance: importanceThreshold,
+        };
+
+        const weights = {
+          recency: recencyBias,
+          importance: 1 - recencyBias,
+          confidence: confidenceThreshold,
+        };
+
+        const searchResults = await forgeFlowService.memoryRetrievalEngine.retrieve(
+          renderedPrompt,
+          filters,
+          weights,
+          maxMemories
+        );
+
+        input.context.services.logger.info(
+          `Memory search completed`,
+          { event: "MEMORY_SEARCH_COMPLETED", count: searchResults.length },
+          input.node.id
+        );
+
+        const retrievedContext = searchResults
+          .map((m) => `[${m.type} Memory - ${m.key}]: ${m.value}`)
+          .join("\n\n");
+
+        input.context.services.logger.info(
+          `Memory context ready`,
+          { event: "MEMORY_CONTEXT_READY" },
+          input.node.id
+        );
+
+        const composer = new PromptComposer();
+        const messages = composer.compose(
+          renderedPrompt,
+          searchResults.map((m, idx) => ({
+            content: m.value,
+            documentId: m.id,
+            chunkId: m.id,
+            index: idx,
+          })),
+          renderedSystemPrompt ?? "Use the retrieved memories to contextualize query."
+        );
+
+        const finalSystemContent = messages.find(m => m.role === "system")?.content ?? "";
+        const finalUserContent = messages.find(m => m.role === "user")?.content ?? "";
+
+        input.context.services.logger.info(
+          `Memory prompt built`,
+          { event: "MEMORY_PROMPT_BUILT" },
+          input.node.id
+        );
+
+        const response = await this.callModel(config, finalUserContent, finalSystemContent, input.signal);
+
+        input.context.services.logger.info(
+          `Memory response received`,
+          { event: "MEMORY_RESPONSE_RECEIVED" },
+          input.node.id
+        );
+
+        return successResult(
+          {
+            out: response.text,
+            err: null,
+          },
+          {
+            model: config.model,
+            promptTokens: response.usage?.promptTokens ?? 0,
+            completionTokens: response.usage?.completionTokens ?? 0,
+            totalTokens: response.usage?.totalTokens ?? 0,
+            rawResponse: response.raw,
+            retrievedMemories: searchResults.map((m) => ({
+              id: m.id,
+              key: m.key,
+              value: m.value,
+              type: m.type,
+              importance: m.importance,
+              confidence: Number(m.metadata?.confidenceScore ?? 0.8),
+              source: String(m.metadata?.source ?? "unknown"),
+            })),
+            retrievedContext,
+            promptPreview: renderedPrompt,
+            finalPrompt: finalSystemContent + "\n\n" + finalUserContent,
+            metrics: response.metrics,
+            events: response.events,
+          }
+        );
+      } else if (executionMode === "knowledge") {
+        input.context.services.logger.info(
+          `Knowledge search started`,
+          { event: "KNOWLEDGE_SEARCH_STARTED", collection: knowledgeCollection },
+          input.node.id
+        );
+
+        const embedProvider = EmbeddingFactory.create("mock");
+        const vectorStore = forgeFlowService.vectorStore;
+
+        const queryVector = await embedProvider.embedSingle(renderedPrompt);
+        const searchResults = await vectorStore.search({
+          vector: queryVector,
+          limit: topK,
+          minScore: similarityThreshold,
+          collection: knowledgeCollection,
+          metric: searchStrategy as any,
+        });
+
+        input.context.services.logger.info(
+          `Knowledge search completed`,
+          { event: "KNOWLEDGE_SEARCH_COMPLETED", count: searchResults.length },
+          input.node.id
+        );
+
+        const builder = new ContextBuilder();
+        const contextResult = builder.buildContext(searchResults, {
+          tokenBudget: maxContextTokens,
+          ordering: "similarity",
+        });
+
+        input.context.services.logger.info(
+          `RAG context ready`,
+          { event: "RAG_CONTEXT_READY", tokensUsed: contextResult.tokensUsed },
+          input.node.id
+        );
+
+        const composer = new PromptComposer();
+        const messages = composer.compose(
+          renderedPrompt,
+          contextResult.citations.map((cit, idx) => ({
+            content: cit.content,
+            documentId: cit.documentId,
+            chunkId: cit.chunkId,
+            index: idx,
+          })),
+          renderedSystemPrompt ?? "Use the provided context to answer query."
+        );
+
+        const finalSystemContent = messages.find(m => m.role === "system")?.content ?? "";
+        const finalUserContent = messages.find(m => m.role === "user")?.content ?? "";
+
+        input.context.services.logger.info(
+          `Prompt sent to LLM model`,
+          { event: "PROMPT_SENT", model: config.model },
+          input.node.id
+        );
+
+        const response = await this.callModel(config, finalUserContent, finalSystemContent, input.signal);
+
+        input.context.services.logger.info(
+          `LLM Response received`,
+          { event: "RESPONSE_RECEIVED", model: config.model },
+          input.node.id
+        );
+
+        return successResult(
+          {
+            out: response.text,
+            err: null,
+          },
+          {
+            model: config.model,
+            promptTokens: response.usage?.promptTokens ?? 0,
+            completionTokens: response.usage?.completionTokens ?? 0,
+            totalTokens: response.usage?.totalTokens ?? 0,
+            rawResponse: response.raw,
+            retrievedChunks: contextResult.citations.map((c) => ({
+              chunkId: c.chunkId,
+              documentId: c.documentId,
+              score: c.score,
+              content: c.content,
+              source: c.metadata.source ?? "unknown",
+              section: c.metadata.section ?? "Root",
+            })),
+            tokensUsed: contextResult.tokensUsed,
+            promptPreview: renderedPrompt,
+            finalPrompt: finalSystemContent + "\n\n" + finalUserContent,
+            citationVisibility,
+            metrics: response.metrics,
+            events: response.events,
+          }
+        );
+      } else {
+        const response = await this.callModel(config, renderedPrompt, renderedSystemPrompt, input.signal);
+        
+        input.context.services.logger.info(
+          `AI response received`,
+          {
+            event: "AI_RESPONSE_RECEIVED",
+            model: config.model,
+            promptTokens: response.usage?.promptTokens ?? 0,
+            completionTokens: response.usage?.completionTokens ?? 0,
+            totalTokens: response.usage?.totalTokens ?? 0,
+          },
+          input.node.id
+        );
+
+        return successResult(
+          {
+            out: response.text,
+            err: null,
+          },
+          {
+            model: config.model,
+            promptTokens: response.usage?.promptTokens ?? 0,
+            completionTokens: response.usage?.completionTokens ?? 0,
+            totalTokens: response.usage?.totalTokens ?? 0,
+            rawResponse: response.raw,
+            metrics: response.metrics,
+            events: response.events,
+          }
+        );
+      }
     } catch (error: any) {
+      const isTimeout = error?.message?.toLowerCase().includes("timeout") || error?.message?.toLowerCase().includes("cancelled");
+      if (isTimeout) {
+        input.context.services.logger.error(
+          `AI request timed out`,
+          { event: "AI_TIMEOUT", model: config.model },
+          input.node.id
+        );
+      }
       return failureResult({
         code: "AI_MODEL_EXECUTION_FAILED",
         message: error?.message || "Failed to execute AI model request",

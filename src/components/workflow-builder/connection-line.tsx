@@ -52,6 +52,7 @@ export const ConnectionLine = memo(function ConnectionLine({
       className="group/conn"
       role="img"
       aria-label={`Connection from node output to node input`}
+      style={{ pointerEvents: "all" }}
     >
       {/* ── Wide invisible hit area for easier selection ───────────────── */}
       <path

@@ -7,6 +7,7 @@ import {
   CodingAgent,
   MemoryAgent,
   ToolAgent,
+  ReviewerAgent,
 } from "./concrete-agents";
 
 export class AgentFactory {
@@ -34,6 +35,9 @@ export class AgentFactory {
       case "tool":
       case "tool-agent":
         return new ToolAgent();
+      case "reviewer":
+      case "reviewer-agent":
+        return new ReviewerAgent();
       default:
         throw new Error(`Unsupported agent type requested: "${type}"`);
     }
@@ -50,6 +54,7 @@ export class AgentFactory {
     registry.register(new CodingAgent());
     registry.register(new MemoryAgent());
     registry.register(new ToolAgent());
+    registry.register(new ReviewerAgent());
     return registry;
   }
 }

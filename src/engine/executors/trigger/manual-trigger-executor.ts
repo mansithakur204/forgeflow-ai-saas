@@ -62,6 +62,12 @@ export class ManualTriggerExecutor extends BaseNodeExecutor {
         ? (context.trigger.payload as Record<string, unknown>)
         : { value: context.trigger.payload };
 
+    input.context.services.logger.info(
+      `Manual trigger received by executor`,
+      { event: "CUSTOM_EVENT", triggerType: context.trigger.type, payload },
+      input.node.id
+    );
+
     return successResult(
       { out: payload },
       {

@@ -29,14 +29,27 @@ export function ExecutionTimeline({
   hideHeader = false,
 }: ExecutionTimelineProps) {
   const listEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastRunIdRef = useRef<string | null>(null);
 
-  // Auto-scroll when the snapshot's node executions update
+  // Auto-scroll when the snapshot's node executions update (if at bottom or run changes)
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const runId = snapshot?.run.id ?? null;
+    const runChanged = lastRunIdRef.current !== runId;
+    lastRunIdRef.current = runId;
+
     const shouldScroll = hideHeader || isOpen;
-    if (shouldScroll && listEndRef.current) {
+    if (!shouldScroll) return;
+
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 45;
+
+    if ((isAtBottom || runChanged) && listEndRef.current) {
       listEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [snapshot?.nodeExecutions.length, isOpen, hideHeader]);
+  }, [snapshot?.nodeExecutions.length, snapshot?.run.id, isOpen, hideHeader]);
 
   if (!snapshot) {
     if (hideHeader) {
@@ -177,7 +190,7 @@ export function ExecutionTimeline({
           </div>
 
           {/* Chronological List of Events (right/main) */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 scrollbar-thin">
+          <div ref={containerRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 scrollbar-thin">
             {nodeExecutions.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground italic">
                 Waiting for node execution...

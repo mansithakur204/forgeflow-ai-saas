@@ -1,8 +1,13 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Parser Factory
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { PDFParser } from "./pdf-parser";
 import { DOCXParser } from "./docx-parser";
 import { TXTParser } from "./txt-parser";
 import { MarkdownParser } from "./markdown-parser";
 import { CSVParser } from "./csv-parser";
+import { HTMLParser } from "./html-parser";
 import { ParserRegistry } from "./parser-registry";
 import type { IDocumentParser } from "./parser.interface";
 
@@ -30,6 +35,9 @@ export class ParserFactory {
       case "csv":
       case "text/csv":
         return new CSVParser();
+      case "html":
+      case "text/html":
+        return new HTMLParser();
       default:
         throw new Error(`Unsupported parser format requested: "${format}"`);
     }
@@ -45,6 +53,7 @@ export class ParserFactory {
     registry.register("txt", new TXTParser());
     registry.register("markdown", new MarkdownParser());
     registry.register("csv", new CSVParser());
+    registry.register("html", new HTMLParser());
     return registry;
   }
 }

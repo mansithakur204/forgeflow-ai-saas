@@ -54,7 +54,8 @@ export type NodeTypeId =
   | "io_http"
   | "io_database"
   | "io_email"
-  | "io_slack";
+  | "io_slack"
+  | "io_google_sheets";
 
 export interface NodeTypeDefinition {
   typeId: NodeTypeId;
@@ -246,6 +247,17 @@ export const NODE_TYPE_CATALOG: NodeTypeDefinition[] = [
     inputs: [{ id: "in", label: "Trigger" }],
     outputs: [{ id: "out", label: "Sent" }],
     defaultConfig: { channel: "#general", text: "" },
+  },
+  {
+    typeId: "io_google_sheets",
+    label: "Google Sheets",
+    description: "Read or write spreadsheet cells",
+    category: "io",
+    icon: Database,
+    accentColor: "success",
+    inputs: [{ id: "in", label: "Trigger" }],
+    outputs: [{ id: "out", label: "Result" }],
+    defaultConfig: { operation: "read", spreadsheetId: "", range: "" },
   },
 ];
 

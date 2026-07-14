@@ -1,6 +1,10 @@
 export * from "./types/document";
 export * from "./repository/knowledge-repository.interface";
 export * from "./storage/storage-provider.interface";
+export * from "./storage/local-storage";
+export * from "./storage/azure-storage";
+export * from "./storage/s3-storage";
+export * from "./storage/storage-provider-factory";
 export * from "./parser/parser.interface";
 export * from "./chunker/chunker.interface";
 
@@ -11,6 +15,10 @@ export * from "./parser/parser-registry";
 export * from "./chunker/chunker-registry";
 export * from "./state/document-state-manager";
 export * from "./runtime/processing-coordinator";
+export * from "./runtime/document-processing-pipeline";
+export * from "./runtime/chunking-engine";
+export * from "./runtime/embedding-engine";
+export * from "./runtime/vector-search-engine";
 
 // Parser additions
 export * from "./parser/parser-result";
@@ -20,6 +28,7 @@ export * from "./parser/csv-parser";
 export * from "./parser/markdown-parser";
 export * from "./parser/pdf-parser";
 export * from "./parser/docx-parser";
+export * from "./parser/html-parser";
 export * from "./parser/parser-factory";
 
 // Chunker additions
@@ -28,12 +37,16 @@ export * from "./chunker/fixed-size-chunker";
 export * from "./chunker/recursive-chunker";
 export * from "./chunker/markdown-chunker";
 export * from "./chunker/semantic-chunker";
+export * from "./chunker/paragraph-chunker";
+export * from "./chunker/sentence-chunker";
+export * from "./chunker/html-sections-chunker";
 export * from "./chunker/chunker-factory";
 
 // Embedding additions
 export * from "./embedding/embedding-provider.interface";
 export * from "./embedding/base-embedding-provider";
 export * from "./embedding/mock-embedding-provider";
+export * from "./embedding/concrete-providers";
 export * from "./embedding/embedding-registry";
 export * from "./embedding/embedding-factory";
 export * from "./embedding/embedding-cache";
@@ -41,6 +54,7 @@ export * from "./embedding/embedding-cache";
 // Vector Store additions
 export * from "./vector-store/vector-store.interface";
 export * from "./vector-store/in-memory-vector-store";
+export * from "./vector-store/concrete-providers";
 export * from "./vector-store/vector-store-registry";
 export * from "./vector-store/vector-store-factory";
 
@@ -68,6 +82,7 @@ export * from "./llm/mock-llm-provider";
 export * from "./llm/llm-registry";
 export * from "./llm/llm-factory";
 export * from "./prompt/prompt-builder";
+export * from "./prompt/prompt-composer";
 export * from "./prompt/response-validator";
 export * from "./runtime/completion-service";
 

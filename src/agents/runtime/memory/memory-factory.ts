@@ -1,5 +1,10 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Memory Provider Factory
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type { IMemoryProvider } from "./memory-provider.interface";
 import { InMemoryMemoryProvider } from "./memory-provider.interface";
+import { PostgresMemoryProvider, RedisMemoryProvider } from "./concrete-providers";
 
 export class MemoryFactory {
   /**
@@ -12,9 +17,15 @@ export class MemoryFactory {
       case "inmemory":
       case "memory":
         return new InMemoryMemoryProvider(id);
+      case "postgres":
+      case "postgresql":
+      case "pg":
+        return new PostgresMemoryProvider(id);
+      case "redis":
+        return new RedisMemoryProvider(id);
       default:
         throw new Error(
-          `Unsupported memory provider type requested: "${type}". External cloud provider drivers must be registered directly in the MemoryRegistry to follow OCP.`
+          `Unsupported memory provider type requested: "${type}".`
         );
     }
   }

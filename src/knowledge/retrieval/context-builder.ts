@@ -1,3 +1,8 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Context Builder Service
+// Merges, deduplicates, orders and constructs LLM prompt contexts.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type { VectorSearchResult } from "../vector-store/vector-store.interface";
 import type { Citation } from "../types/query";
 import { TokenBudgetManager } from "./token-budget-manager";
@@ -8,9 +13,16 @@ export interface BuildContextResult {
   tokensUsed: number;
 }
 
+export type ContextOrderingType = "similarity" | "index";
+
+export interface ContextBuilderOptions {
+  tokenBudget?: number;
+  ordering?: ContextOrderingType;
+}
+
 export class ContextBuilder {
   /**
-   * Removes duplicate chunks based on ID key index.
+   * Removes duplicate chunks based on their ID key.
    */
   deduplicate(results: VectorSearchResult[]): VectorSearchResult[] {
     const seen = new Set<string>();
@@ -23,16 +35,38 @@ export class ContextBuilder {
   }
 
   /**
-   * Compiles search results into a clean context prompt block, checking token budgets.
+   * Orders chunks by similarity score or chunk index.
    */
-  buildContext(results: VectorSearchResult[], tokenBudget = 2000): BuildContextResult {
+  orderChunks(results: VectorSearchResult[], ordering: ContextOrderingType = "similarity"): VectorSearchResult[] {
+    const sorted = [...results];
+    if (ordering === "similarity") {
+      return sorted.sort((a, b) => b.score - a.score);
+    } else if (ordering === "index") {
+      return sorted.sort((a, b) => {
+        const indexA = (a.record.metadata?.index as number) ?? 0;
+        const indexB = (b.record.metadata?.index as number) ?? 0;
+        return indexA - indexB;
+      });
+    }
+    return sorted;
+  }
+
+  /**
+   * Compiles search results into a clean context prompt block, keeping track of token usage.
+   */
+  buildContext(results: VectorSearchResult[], options: ContextBuilderOptions = {}): BuildContextResult {
+    const tokenBudget = options.tokenBudget ?? 2000;
+    const ordering = options.ordering ?? "similarity";
+
     const budgetManager = new TokenBudgetManager(tokenBudget);
     const uniqueResults = this.deduplicate(results);
+    const orderedResults = this.orderChunks(uniqueResults, ordering);
+
     const citations: Citation[] = [];
     const contextBlocks: string[] = [];
 
-    for (let i = 0; i < uniqueResults.length; i++) {
-      const res = uniqueResults[i];
+    for (let i = 0; i < orderedResults.length; i++) {
+      const res = orderedResults[i];
       const chunkId = res.record.id;
       const docId = res.record.documentId;
       const text = res.record.content;
@@ -41,9 +75,8 @@ export class ContextBuilder {
 
       const textEstimate = budgetManager.estimateTokens(text);
 
-      // Verify budget constraint
       if (!budgetManager.hasBudgetFor(textEstimate)) {
-        continue; // Context compression: skip chunk if it exceeds budget limit
+        continue;
       }
 
       budgetManager.addTokens(textEstimate);
@@ -55,7 +88,11 @@ export class ContextBuilder {
         documentId: docId,
         content: text,
         score,
-        metadata,
+        metadata: {
+          ...metadata,
+          source: (metadata?.source as string) ?? "unknown",
+          section: (metadata?.headingPath as string) ?? (metadata?.header as string) ?? "Root",
+        },
       });
     }
 

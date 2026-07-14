@@ -9,6 +9,12 @@ import {
   AutonomousCoordinator,
   AgentFactory,
   BaseTool,
+  InMemoryMemoryRepository,
+  WorkingMemoryEngine,
+  ConversationMemoryEngine,
+  LongTermMemoryEngine,
+  SemanticMemoryEngine,
+  UnifiedMemoryRetrievalEngine,
 } from "@/agents";
 import { InMemoryVectorStore } from "@/knowledge/vector-store/in-memory-vector-store";
 import { executionHistory } from "./execution-history";
@@ -16,8 +22,12 @@ import { executionHistory } from "./execution-history";
 type ExecutionHistoryStore = typeof executionHistory;
 
 // Concrete repositories for Knowledge
-import type { IKnowledgeDocumentRepository, IKnowledgeSourceRepository, IChunkRepository } from "@/knowledge/repository/knowledge-repository.interface";
-import type { KnowledgeDocument, KnowledgeSource, Chunk, DocumentStatus } from "@/knowledge/types/document";
+import type { IKnowledgeDocumentRepository, IKnowledgeSourceRepository, IChunkRepository, IKnowledgeCollectionRepository, KnowledgeSourceTypeFilter, IEmbeddingRepository, EmbeddingMetadata, PersistentEmbedding } from "@/knowledge/repository/knowledge-repository.interface";
+import type { KnowledgeDocument, KnowledgeSource, Chunk, DocumentStatus, KnowledgeCollection } from "@/knowledge/types/document";
+
+import { EmbeddingFactory } from "@/knowledge/embedding/embedding-factory";
+import { MockLLMProvider } from "@/knowledge/llm/mock-llm-provider";
+import { RetrievalPipeline } from "@/knowledge/retrieval/retrieval-pipeline";
 
 // InMemory repositories for Knowledge Engine integration
 class InMemoryKnowledgeDocumentRepository implements IKnowledgeDocumentRepository {
@@ -56,8 +66,54 @@ class InMemoryKnowledgeDocumentRepository implements IKnowledgeDocumentRepositor
   async delete(id: string): Promise<void> {
     this.docs.delete(id);
   }
-  async list(): Promise<KnowledgeDocument[]> {
-    return Array.from(this.docs.values());
+  async list(filter?: { status?: DocumentStatus; collectionId?: string; limit?: number; offset?: number }): Promise<KnowledgeDocument[]> {
+    let result = Array.from(this.docs.values());
+    if (filter?.status) {
+      result = result.filter((d) => d.status === filter.status);
+    }
+    if (filter?.collectionId) {
+      result = result.filter((d) => d.collectionId === filter.collectionId);
+    }
+    const offset = filter?.offset ?? 0;
+    const limit = filter?.limit ?? result.length;
+    return result.slice(offset, offset + limit);
+  }
+
+  // Extensions
+  async update(id: string, updates: Partial<Omit<KnowledgeDocument, "id" | "createdAt" | "updatedAt">>): Promise<KnowledgeDocument> {
+    const doc = this.docs.get(id);
+    if (!doc) throw new Error("Doc not found");
+    Object.assign(doc, updates);
+    doc.updatedAt = new Date().toISOString();
+    return doc;
+  }
+  async search(query: string, filter?: { collectionId?: string; status?: DocumentStatus }): Promise<KnowledgeDocument[]> {
+    let result = Array.from(this.docs.values());
+    if (filter?.status) {
+      result = result.filter((d) => d.status === filter.status);
+    }
+    if (filter?.collectionId) {
+      result = result.filter((d) => d.collectionId === filter.collectionId);
+    }
+    const q = query.toLowerCase();
+    return result.filter((d) => d.title.toLowerCase().includes(q) || d.metadata.fileName.toLowerCase().includes(q));
+  }
+  async createMany(documents: Omit<KnowledgeDocument, "createdAt" | "updatedAt">[]): Promise<KnowledgeDocument[]> {
+    const created: KnowledgeDocument[] = [];
+    for (const doc of documents) {
+      created.push(await this.create(doc));
+    }
+    return created;
+  }
+  async updateMany(updates: { id: string; changes: Partial<Omit<KnowledgeDocument, "id" | "createdAt" | "updatedAt">> }[]): Promise<void> {
+    for (const update of updates) {
+      await this.update(update.id, update.changes);
+    }
+  }
+  async deleteMany(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.delete(id);
+    }
   }
 }
 
@@ -75,8 +131,14 @@ class InMemoryKnowledgeSourceRepository implements IKnowledgeSourceRepository {
   async getById(id: string): Promise<KnowledgeSource | null> {
     return this.sources.get(id) ?? null;
   }
-  async list(): Promise<KnowledgeSource[]> {
-    return Array.from(this.sources.values());
+  async list(filter?: { type?: KnowledgeSourceTypeFilter; limit?: number; offset?: number }): Promise<KnowledgeSource[]> {
+    let result = Array.from(this.sources.values());
+    if (filter?.type) {
+      result = result.filter((s) => s.type === filter.type);
+    }
+    const offset = filter?.offset ?? 0;
+    const limit = filter?.limit ?? result.length;
+    return result.slice(offset, offset + limit);
   }
   async update(id: string, updates: Partial<Omit<KnowledgeSource, "id" | "createdAt" | "updatedAt">>): Promise<KnowledgeSource> {
     const src = this.sources.get(id);
@@ -88,10 +150,54 @@ class InMemoryKnowledgeSourceRepository implements IKnowledgeSourceRepository {
   async delete(id: string): Promise<void> {
     this.sources.delete(id);
   }
+
+  // Extensions
+  async search(query: string): Promise<KnowledgeSource[]> {
+    const q = query.toLowerCase();
+    return Array.from(this.sources.values()).filter((s) => s.name.toLowerCase().includes(q));
+  }
+  async createMany(sources: Omit<KnowledgeSource, "createdAt" | "updatedAt">[]): Promise<KnowledgeSource[]> {
+    const created: KnowledgeSource[] = [];
+    for (const s of sources) {
+      created.push(await this.create(s));
+    }
+    return created;
+  }
+  async updateMany(updates: { id: string; changes: Partial<Omit<KnowledgeSource, "id" | "createdAt" | "updatedAt">> }[]): Promise<void> {
+    for (const update of updates) {
+      await this.update(update.id, update.changes);
+    }
+  }
+  async deleteMany(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.delete(id);
+    }
+  }
 }
 
 class InMemoryChunkRepository implements IChunkRepository {
   private chunks: Chunk[] = [];
+
+  async create(chunk: Omit<Chunk, "id" | "createdAt">): Promise<Chunk> {
+    const created: Chunk = {
+      ...chunk,
+      id: `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.chunks.push(created);
+    return created;
+  }
+  async update(id: string, updates: Partial<Omit<Chunk, "id" | "createdAt">>): Promise<Chunk> {
+    const idx = this.chunks.findIndex((c) => c.id === id);
+    if (idx === -1) throw new Error("Chunk not found");
+    const updated = { ...this.chunks[idx], ...updates } as Chunk;
+    this.chunks[idx] = updated;
+    return updated;
+  }
+  async delete(id: string): Promise<void> {
+    this.chunks = this.chunks.filter((c) => c.id !== id);
+  }
+
   async createMany(chunksList: Omit<Chunk, "id" | "createdAt">[]): Promise<Chunk[]> {
     const result: Chunk[] = chunksList.map((c, idx) => ({
       ...c,
@@ -110,8 +216,100 @@ class InMemoryChunkRepository implements IChunkRepository {
   async search(query: string): Promise<Chunk[]> {
     return this.chunks.filter((c) => c.content.toLowerCase().includes(query.toLowerCase()));
   }
+  async updateMany(updates: { id: string; changes: Partial<Omit<Chunk, "id" | "createdAt">> }[]): Promise<void> {
+    for (const update of updates) {
+      await this.update(update.id, update.changes);
+    }
+  }
+  async deleteMany(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.delete(id);
+    }
+  }
   getAll(): Chunk[] {
     return this.chunks;
+  }
+}
+
+class InMemoryKnowledgeCollectionRepository implements IKnowledgeCollectionRepository {
+  private collections = new Map<string, KnowledgeCollection>();
+
+  async create(collection: Omit<KnowledgeCollection, "createdAt" | "updatedAt">): Promise<KnowledgeCollection> {
+    const col: KnowledgeCollection = {
+      ...collection,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.collections.set(col.id, col);
+    return col;
+  }
+  async getById(id: string): Promise<KnowledgeCollection | null> {
+    return this.collections.get(id) ?? null;
+  }
+  async update(id: string, updates: Partial<Omit<KnowledgeCollection, "id" | "createdAt" | "updatedAt">>): Promise<KnowledgeCollection> {
+    const col = this.collections.get(id);
+    if (!col) throw new Error("Collection not found");
+    Object.assign(col, updates);
+    col.updatedAt = new Date().toISOString();
+    return col;
+  }
+  async delete(id: string): Promise<void> {
+    this.collections.delete(id);
+  }
+  async list(filter?: { limit?: number; offset?: number }): Promise<KnowledgeCollection[]> {
+    const result = Array.from(this.collections.values());
+    const offset = filter?.offset ?? 0;
+    const limit = filter?.limit ?? result.length;
+    return result.slice(offset, offset + limit);
+  }
+  async createMany(collections: Omit<KnowledgeCollection, "createdAt" | "updatedAt">[]): Promise<KnowledgeCollection[]> {
+    const created: KnowledgeCollection[] = [];
+    for (const col of collections) {
+      created.push(await this.create(col));
+    }
+    return created;
+  }
+  async deleteMany(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.delete(id);
+    }
+  }
+}
+
+class InMemoryEmbeddingRepository implements IEmbeddingRepository {
+  private embeddings = new Map<string, PersistentEmbedding>();
+
+  async save(chunkId: string, vector: number[], metadata: EmbeddingMetadata): Promise<PersistentEmbedding> {
+    const entry: PersistentEmbedding = {
+      chunkId,
+      vector,
+      metadata,
+      createdAt: new Date().toISOString(),
+    };
+    this.embeddings.set(chunkId, entry);
+    return entry;
+  }
+
+  async saveBatch(entries: { chunkId: string; vector: number[]; metadata: EmbeddingMetadata }[]): Promise<void> {
+    for (const e of entries) {
+      await this.save(e.chunkId, e.vector, e.metadata);
+    }
+  }
+
+  async get(chunkId: string): Promise<PersistentEmbedding | null> {
+    return this.embeddings.get(chunkId) ?? null;
+  }
+
+  async delete(chunkId: string): Promise<void> {
+    this.embeddings.delete(chunkId);
+  }
+
+  async deleteByDocumentId(documentId: string): Promise<void> {
+    // Delete in-memory records matching document
+  }
+
+  async clear(): Promise<void> {
+    this.embeddings.clear();
   }
 }
 
@@ -124,10 +322,19 @@ export class ForgeFlowService {
   public workflowCoordinator: AgentWorkflowCoordinator;
   public autonomousCoordinator: AutonomousCoordinator;
 
+  public workingMemoryEngine: WorkingMemoryEngine;
+  public conversationMemoryEngine: ConversationMemoryEngine;
+  public longTermMemoryEngine: LongTermMemoryEngine;
+  public semanticMemoryEngine: SemanticMemoryEngine;
+  public memoryRetrievalEngine: UnifiedMemoryRetrievalEngine;
+
   public docRepository: InMemoryKnowledgeDocumentRepository;
   public sourceRepository: InMemoryKnowledgeSourceRepository;
   public chunkRepository: InMemoryChunkRepository;
+  public collectionRepository: InMemoryKnowledgeCollectionRepository;
+  public embeddingRepository: InMemoryEmbeddingRepository;
   public vectorStore: InMemoryVectorStore;
+  public retrievalPipeline: RetrievalPipeline;
   public retrievalCount = 0;
 
   /** Live execution history — workflow runs, agent runs, and activity log */
@@ -176,6 +383,18 @@ export class ForgeFlowService {
     const memoryProvider = MemoryFactory.create("in-memory", "forgeflow-main-provider");
     this.memorySystem = new AgentMemorySystem(memoryProvider);
 
+    this.workingMemoryEngine = new WorkingMemoryEngine();
+    this.conversationMemoryEngine = new ConversationMemoryEngine();
+    const memoryRepo = new InMemoryMemoryRepository();
+    this.longTermMemoryEngine = new LongTermMemoryEngine({ repository: memoryRepo });
+    this.semanticMemoryEngine = new SemanticMemoryEngine({ repository: memoryRepo });
+    this.memoryRetrievalEngine = new UnifiedMemoryRetrievalEngine({
+      workingMemory: this.workingMemoryEngine,
+      conversationMemory: this.conversationMemoryEngine,
+      longTermMemory: this.longTermMemoryEngine,
+      semanticMemory: this.semanticMemoryEngine,
+    });
+
     // Seed some memory elements inside the main class instance
     this.seedMemory();
 
@@ -208,8 +427,14 @@ export class ForgeFlowService {
     this.docRepository = new InMemoryKnowledgeDocumentRepository();
     this.sourceRepository = new InMemoryKnowledgeSourceRepository();
     this.chunkRepository = new InMemoryChunkRepository();
-    // 1536-dimensional vector store matches standard embedding models (e.g., text-embedding-3-small, Gemini embedding)
+    this.collectionRepository = new InMemoryKnowledgeCollectionRepository();
+    this.embeddingRepository = new InMemoryEmbeddingRepository();
     this.vectorStore = new InMemoryVectorStore(1536);
+    this.retrievalPipeline = new RetrievalPipeline(
+      EmbeddingFactory.create("mock"),
+      this.vectorStore,
+      new MockLLMProvider()
+    );
 
     this.seedKnowledge();
   }

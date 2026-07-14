@@ -23,8 +23,11 @@ import {
   parseWorkflowGraphFromCanvas,
   InMemoryExecutionLogger,
   ExecutionError,
+  TimelineCollector,
+  timelineService,
   type WorkflowRunSnapshot,
   type ExecutionLogEntry,
+  type TimelineEntry,
 } from "@/engine";
 import type { NodeExecutionInput } from "@/engine/types/runtime";
 import { toast } from "sonner";
@@ -82,6 +85,8 @@ const ZOOM_STEP = 0.12;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 2.0;
 
+import { useRouter } from "next/navigation";
+
 // ─────────────────────────────────────────────────────────────────────────────
 export function BuilderShell({
   workflowId,
@@ -89,6 +94,8 @@ export function BuilderShell({
   initialNodes,
   initialConnections,
 }: BuilderShellProps) {
+  const router = useRouter();
+
   // ── Core state ──────────────────────────────────────────────────────────────
   const [nodes, setNodes] = useState<CanvasNode[]>(initialNodes);
   const [connections, setConnections] = useState<NodeConnection[]>(initialConnections);
@@ -101,6 +108,7 @@ export function BuilderShell({
   const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(false);
   const [activeBottomTab, setActiveBottomTab] = useState<"timeline" | "logs" | "history">("logs");
   const [executionLogs, setExecutionLogs] = useState<ExecutionLogEntry[]>([]);
+  const [timelineEntries, setTimelineEntries] = useState<readonly TimelineEntry[]>([]);
   const [activeRightTab, setActiveRightTab] = useState<"config" | "inspector">("config");
   const [historyList, setHistoryList] = useState<RunHistoryEntry[]>([]);
   const historyServiceRef = useRef<RunHistoryService>(new RunHistoryService());
@@ -137,6 +145,10 @@ export function BuilderShell({
   const activeLogs = replayController
     ? replayController.getReplayedLogs()
     : executionLogs;
+
+  const activeTimelineEntries = replayController
+    ? replayController.getReplayedTimelineEntries()
+    : timelineEntries;
 
   const visualNodes = useMemo(() => {
     if (!activeSnapshot) return nodes;
@@ -223,50 +235,6 @@ export function BuilderShell({
     setConnections(entry.connections);
   }, []);
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey && !isInput) {
-        e.preventDefault();
-        handleUndo();
-      }
-      if ((e.metaKey || e.ctrlKey) && (e.key === "y" || (e.key === "z" && e.shiftKey)) && !isInput) {
-        e.preventDefault();
-        handleRedo();
-      }
-      // Ctrl+D — duplicate last selected node
-      if ((e.metaKey || e.ctrlKey) && e.key === "d" && !isInput) {
-        e.preventDefault();
-        const lastId = selectedNodeIds[selectedNodeIds.length - 1];
-        if (lastId) handleDuplicateNode(lastId);
-      }
-      // Ctrl+A — select all nodes
-      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !isInput) {
-        e.preventDefault();
-        setSelectedNodeIds(nodes.map((n) => n.id));
-      }
-      // Delete / Backspace — remove all selected nodes at once
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedNodeIds.length > 0 && !isInput) {
-          const idsToDelete = new Set(selectedNodeIds);
-          const nextNodes = nodes.filter((n) => !idsToDelete.has(n.id));
-          const nextConns = connections.filter(
-            (c) => !idsToDelete.has(c.fromNodeId) && !idsToDelete.has(c.toNodeId)
-          );
-          setNodes(nextNodes);
-          setConnections(nextConns);
-          setSelectedNodeIds([]);
-          pushHistory(nextNodes, nextConns);
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeIds, nodes, connections, handleUndo, handleRedo]);
 
   // ── Node operations ─────────────────────────────────────────────────────────
 
@@ -334,7 +302,7 @@ export function BuilderShell({
       const newNode: CanvasNode = {
         ...src,
         id: nextNodeId(),
-        position: { x: src.position.x + 24, y: src.position.y + 24 },
+        position: { x: src.position.x + 40, y: src.position.y + 40 },
         runStatus: "idle",
       };
       const nextNodes = [...nodes, newNode];
@@ -452,7 +420,7 @@ export function BuilderShell({
     const runId = `run-${Date.now()}`;
     activeRunIdRef.current = runId;
 
-    const logger = new InMemoryExecutionLogger();
+    const logger = new TimelineCollector(parsedWf.id, timelineService);
     const context = new ExecutionContext({
       runId,
       workflow: parsedWf,
@@ -469,6 +437,7 @@ export function BuilderShell({
     // 4. Initialize nodes to pending runStatus
     setRunSnapshot(null);
     setExecutionLogs([]);
+    setTimelineEntries([]);
     setIsBottomPanelOpen(true);
     setActiveRightTab("inspector");
     setNodes((prev) => prev.map((n) => ({ ...n, runStatus: "pending" })));
@@ -482,6 +451,7 @@ export function BuilderShell({
       if (snapshot) {
         setRunSnapshot(snapshot);
         setExecutionLogs(logger.getEntries(runId));
+        setTimelineEntries(timelineService.getEntries(runId));
         setNodes((prev) =>
           prev.map((node) => {
             const exec = snapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
@@ -513,6 +483,7 @@ export function BuilderShell({
       setRunSnapshot(finalSnapshot);
       const finalLogs = logger.getEntries(runId);
       setExecutionLogs(finalLogs);
+      setTimelineEntries(timelineService.getEntries(runId));
       setNodes((prev) =>
         prev.map((node) => {
           const exec = finalSnapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
@@ -520,7 +491,7 @@ export function BuilderShell({
         })
       );
 
-      historyServiceRef.current.add(finalSnapshot, finalLogs);
+      historyServiceRef.current.add(finalSnapshot, finalLogs, [...timelineService.getEntries(runId)]);
       setHistoryList(historyServiceRef.current.getAll());
 
       // Persist execution to server-side history (fire-and-forget)
@@ -549,8 +520,9 @@ export function BuilderShell({
       }
       const finalLogs = logger.getEntries(runId);
       setExecutionLogs(finalLogs);
+      setTimelineEntries(timelineService.getEntries(runId));
       if (finalSnap) {
-        historyServiceRef.current.add(finalSnap, finalLogs);
+        historyServiceRef.current.add(finalSnap, finalLogs, [...timelineService.getEntries(runId)]);
         setHistoryList(historyServiceRef.current.getAll());
       }
       toast.error(`Workflow execution crashed: ${err.message}`);
@@ -580,6 +552,7 @@ export function BuilderShell({
     }
     setRunSnapshot(entry.snapshot);
     setExecutionLogs(entry.logs);
+    setTimelineEntries(entry.timelineEntries || []);
     setNodes((prev) =>
       prev.map((node) => {
         const exec = entry.snapshot.nodeExecutions.find((e: any) => e.nodeId === node.id);
@@ -593,7 +566,7 @@ export function BuilderShell({
   }, [replayController]);
 
   const handleEnterReplay = useCallback((entry: RunHistoryEntry) => {
-    const controller = new ReplayController(entry.snapshot, entry.logs, () => {
+    const controller = new ReplayController(entry.snapshot, entry.logs, entry.timelineEntries || [], () => {
       setReplayTick((t) => t + 1);
     });
     setReplayController(controller);
@@ -625,6 +598,8 @@ export function BuilderShell({
           runCount: 0,
           lastRun: new Date().toISOString(),
           tags: ["User-Created"],
+          nodes,
+          connections,
         }),
       });
       const data = await res.json();
@@ -632,12 +607,65 @@ export function BuilderShell({
         throw new Error(data.error || "Save failed");
       }
       toast.success("Workflow saved successfully!");
+      if (workflowId === "new" && data.workflow?.id) {
+        router.push(`/workflows/${data.workflow.id}`);
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(`Failed to save workflow: ${err.message}`);
       throw err;
     }
-  }, [workflowId, workflowName, nodes]);
+  }, [workflowId, workflowName, nodes, connections, router]);
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey && !isInput) {
+        e.preventDefault();
+        handleUndo();
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "y" || (e.key === "z" && e.shiftKey)) && !isInput) {
+        e.preventDefault();
+        handleRedo();
+      }
+      // Ctrl+S — save workflow
+      if ((e.metaKey || e.ctrlKey) && e.key === "s" && !isInput) {
+        e.preventDefault();
+        handleSaveWorkflow();
+      }
+      // Ctrl+D — duplicate last selected node
+      if ((e.metaKey || e.ctrlKey) && e.key === "d" && !isInput) {
+        e.preventDefault();
+        const lastId = selectedNodeIds[selectedNodeIds.length - 1];
+        if (lastId) handleDuplicateNode(lastId);
+      }
+      // Ctrl+A — select all nodes
+      if ((e.metaKey || e.ctrlKey) && e.key === "a" && !isInput) {
+        e.preventDefault();
+        setSelectedNodeIds(nodes.map((n) => n.id));
+      }
+      // Delete / Backspace — remove all selected nodes at once
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedNodeIds.length > 0 && !isInput) {
+          const idsToDelete = new Set(selectedNodeIds);
+          const nextNodes = nodes.filter((n) => !idsToDelete.has(n.id));
+          const nextConns = connections.filter(
+            (c) => !idsToDelete.has(c.fromNodeId) && !idsToDelete.has(c.toNodeId)
+          );
+          setNodes(nextNodes);
+          setConnections(nextConns);
+          setSelectedNodeIds([]);
+          pushHistory(nextNodes, nextConns);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNodeIds, nodes, connections, handleUndo, handleRedo, handleSaveWorkflow]);
 
   // ── Palette drag ────────────────────────────────────────────────────────────
 
@@ -726,6 +754,7 @@ export function BuilderShell({
               isRunning={isRunning}
               onSelectNode={(id) => setSelectedNodeIds(id ? [id] : [])}
               onMoveNode={handleMoveNode}
+              onMoveNodeEnd={handleMoveNodeEnd}
               onAddNode={handleAddNode}
               onAddConnection={handleAddConnection}
               onDeleteConnection={handleDeleteConnection}
@@ -886,6 +915,8 @@ export function BuilderShell({
                       selectedNodeLabel={selectedNode ? selectedNode.label : null}
                       selectedNodeTypeId={selectedNode ? selectedNode.typeId : null}
                       snapshot={activeSnapshot}
+                      timelineEntries={activeTimelineEntries}
+                      onJumpToEvent={replayController ? (entry) => replayController.jumpToEvent(entry) : undefined}
                       onClose={() => setSelectedNodeIds([])}
                     />
                   ) : (

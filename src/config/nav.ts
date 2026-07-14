@@ -47,6 +47,11 @@ export const navGroups: NavGroup[] = [
         icon: Bot,
       },
       {
+        title: "Knowledge",
+        href: "/knowledge",
+        icon: BookOpen,
+      },
+      {
         title: "Pipelines",
         href: "/pipelines",
         icon: Workflow,

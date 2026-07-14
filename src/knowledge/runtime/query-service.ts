@@ -51,7 +51,7 @@ export class QueryService {
     // 3. Formats prompt context budget allocations
     const contextStart = Date.now();
     const tokenLimit = request.tokenBudget ?? 2000;
-    const { context, citations, tokensUsed } = this.contextBuilder.buildContext(results, tokenLimit);
+    const { context, citations, tokensUsed } = this.contextBuilder.buildContext(results, { tokenBudget: tokenLimit });
     const contextBuildTimeMs = Date.now() - contextStart;
 
     const totalTimeMs = Date.now() - totalStart;

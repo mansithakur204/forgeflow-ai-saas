@@ -181,6 +181,12 @@ export class HttpExecutor extends BaseNodeExecutor {
       );
     }
 
+    input.context.services.logger.info(
+      `HTTP Request: ${request.method} ${request.url}`,
+      { event: "HTTP_REQUEST", method: request.method, url: request.url },
+      input.node.id
+    );
+
     const triggerInput = input.inputs.in ?? input.inputs;
     const mock = buildMockResponse(request, triggerInput);
 
@@ -190,6 +196,12 @@ export class HttpExecutor extends BaseNodeExecutor {
           aggregated: JSON.stringify(mock.body),
         }
       : undefined;
+
+    input.context.services.logger.info(
+      `HTTP Response: ${mock.metadata.status} ${mock.metadata.statusText}`,
+      { event: "HTTP_RESPONSE", method: request.method, url: request.url, status: mock.metadata.status },
+      input.node.id
+    );
 
     return Promise.resolve(
       successResult(

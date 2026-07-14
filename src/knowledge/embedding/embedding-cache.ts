@@ -1,13 +1,25 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgeFlow AI — Embedding Cache Layer
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface EmbeddingCacheKey {
+  chunkId: string;
+  contentHash: string;
+  model: string;
+  dimensions: number;
+  version: number;
+}
+
 export interface IEmbeddingCache {
   /**
    * Resolves cached vector projections.
    */
-  get(text: string, model: string): Promise<number[] | null>;
+  get(key: EmbeddingCacheKey): Promise<number[] | null>;
 
   /**
-   * Caches a vector projection for a target string.
+   * Caches a vector projection for a target split.
    */
-  set(text: string, model: string, embedding: number[]): Promise<void>;
+  set(key: EmbeddingCacheKey, embedding: number[]): Promise<void>;
 
   /**
    * Resets all cached records.
@@ -18,17 +30,17 @@ export interface IEmbeddingCache {
 export class InMemoryEmbeddingCache implements IEmbeddingCache {
   private cache = new Map<string, number[]>();
 
-  private makeKey(text: string, model: string): string {
-    return `${model.toLowerCase().trim()}:${text}`;
+  private makeKey(key: EmbeddingCacheKey): string {
+    return `${key.chunkId}:${key.contentHash}:${key.model.toLowerCase().trim()}:${key.dimensions}:${key.version}`;
   }
 
-  async get(text: string, model: string): Promise<number[] | null> {
-    const entry = this.cache.get(this.makeKey(text, model));
+  async get(key: EmbeddingCacheKey): Promise<number[] | null> {
+    const entry = this.cache.get(this.makeKey(key));
     return entry ? [...entry] : null;
   }
 
-  async set(text: string, model: string, embedding: number[]): Promise<void> {
-    this.cache.set(this.makeKey(text, model), [...embedding]);
+  async set(key: EmbeddingCacheKey, embedding: number[]): Promise<void> {
+    this.cache.set(this.makeKey(key), [...embedding]);
   }
 
   async clear(): Promise<void> {

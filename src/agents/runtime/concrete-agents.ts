@@ -1,37 +1,10 @@
 import { BaseAgent } from "./base-agent";
-import type { AgentStatus } from "../types/agent";
+import type { AgentStatus, AgentRole } from "../types/agent";
 import type { AgentSession } from "../types/session";
-
-export class PlannerAgent extends BaseAgent {
-  constructor() {
-    super({
-      id: "planner-agent",
-      metadata: {
-        id: "planner-agent",
-        name: "Planner Agent",
-        description: "Creates and updates execution plans.",
-        version: "1.0.0",
-        author: "ForgeFlow AI",
-      },
-      capabilities: {
-        canPlan: true,
-        canExecute: false,
-        canSearchCode: false,
-        canEditCode: false,
-        canAccessMemory: true,
-        canUseTools: false,
-      },
-    });
-  }
-
-  async executeStep(session: AgentSession, input: string) {
-    return {
-      output: `[Planner] Structured execution plan for: ${input}`,
-      newStatus: "completed" as AgentStatus,
-      metadata: { planType: "sequential" },
-    };
-  }
-}
+import { PlannerAgent } from "./planning/planner-agent";
+import { ResearchAgent } from "./research/research-agent";
+import { ToolAgent } from "./tools/tool-agent";
+export { PlannerAgent, ResearchAgent, ToolAgent };
 
 export class ExecutorAgent extends BaseAgent {
   constructor() {
@@ -52,6 +25,7 @@ export class ExecutorAgent extends BaseAgent {
         canAccessMemory: false,
         canUseTools: true,
       },
+      role: "executor" as AgentRole,
     });
   }
 
@@ -63,35 +37,7 @@ export class ExecutorAgent extends BaseAgent {
   }
 }
 
-export class ResearchAgent extends BaseAgent {
-  constructor() {
-    super({
-      id: "research-agent",
-      metadata: {
-        id: "research-agent",
-        name: "Research Agent",
-        description: "Searches documentation and websites.",
-        version: "1.0.0",
-        author: "ForgeFlow AI",
-      },
-      capabilities: {
-        canPlan: false,
-        canExecute: false,
-        canSearchCode: true,
-        canEditCode: false,
-        canAccessMemory: true,
-        canUseTools: true,
-      },
-    });
-  }
 
-  async executeStep(session: AgentSession, input: string) {
-    return {
-      output: `[Research] Gathered knowledge sources for: ${input}`,
-      newStatus: "completed" as AgentStatus,
-    };
-  }
-}
 
 export class CodingAgent extends BaseAgent {
   constructor() {
@@ -112,6 +58,7 @@ export class CodingAgent extends BaseAgent {
         canAccessMemory: false,
         canUseTools: false,
       },
+      role: "coder" as AgentRole,
     });
   }
 
@@ -142,6 +89,7 @@ export class MemoryAgent extends BaseAgent {
         canAccessMemory: true,
         canUseTools: false,
       },
+      role: "memory" as AgentRole,
     });
   }
 
@@ -153,32 +101,36 @@ export class MemoryAgent extends BaseAgent {
   }
 }
 
-export class ToolAgent extends BaseAgent {
+
+
+export class ReviewerAgent extends BaseAgent {
   constructor() {
     super({
-      id: "tool-agent",
+      id: "reviewer-agent",
       metadata: {
-        id: "tool-agent",
-        name: "Tool Agent",
-        description: "Orchestrates API calls and tool integrations.",
+        id: "reviewer-agent",
+        name: "Reviewer Agent",
+        description: "Reviews and validates task outputs and execution results.",
         version: "1.0.0",
         author: "ForgeFlow AI",
       },
       capabilities: {
-        canPlan: false,
-        canExecute: true,
+        canPlan: true,
+        canExecute: false,
         canSearchCode: false,
         canEditCode: false,
-        canAccessMemory: false,
-        canUseTools: true,
+        canAccessMemory: true,
+        canUseTools: false,
       },
+      role: "reviewer" as AgentRole,
     });
   }
 
   async executeStep(session: AgentSession, input: string) {
     return {
-      output: `[Tool] Tool output compiled for: ${input}`,
+      output: `[Reviewer] Task output reviewed and approved for: ${input}`,
       newStatus: "completed" as AgentStatus,
+      metadata: { score: 0.98, status: "approved" },
     };
   }
 }

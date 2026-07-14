@@ -1,8 +1,9 @@
-import type { WorkflowRunSnapshot, ExecutionLogEntry } from "@/engine";
+import type { WorkflowRunSnapshot, ExecutionLogEntry, TimelineEntry } from "@/engine";
 
 export interface RunHistoryEntry {
   snapshot: WorkflowRunSnapshot;
   logs: ExecutionLogEntry[];
+  timelineEntries: TimelineEntry[];
 }
 
 export class RunHistoryService {
@@ -13,11 +14,12 @@ export class RunHistoryService {
     this.maxEntries = maxEntries;
   }
 
-  add(snapshot: WorkflowRunSnapshot, logs: ExecutionLogEntry[]): void {
+  add(snapshot: WorkflowRunSnapshot, logs: ExecutionLogEntry[], timelineEntries: TimelineEntry[]): void {
     // Add to the front so the list is ordered newest-runs first
     this.history.unshift({
       snapshot: JSON.parse(JSON.stringify(snapshot)), // deep clone to enforce read-only isolation
       logs: JSON.parse(JSON.stringify(logs)),
+      timelineEntries: JSON.parse(JSON.stringify(timelineEntries)),
     });
     // Discard oldest entries beyond maxEntries
     if (this.history.length > this.maxEntries) {

@@ -7,7 +7,7 @@ export interface ParsedDocument {
   diagnostics?: ParserDiagnostics;
 }
 
-export type SupportedParserFormat = "pdf" | "docx" | "txt" | "markdown" | "csv";
+export type SupportedParserFormat = "pdf" | "docx" | "txt" | "markdown" | "csv" | "html";
 
 export interface IDocumentParser {
   /**

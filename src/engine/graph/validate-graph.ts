@@ -318,7 +318,7 @@ export function validateWorkflowGraph(
 
   if (!hasStructuralErrors) {
     errors.push(...detectCycle(definition));
-    errors.push(...findOrphanNodes(definition));
+    warnings.push(...findOrphanNodes(definition));
   }
 
   return {

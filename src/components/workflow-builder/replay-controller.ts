@@ -1,10 +1,11 @@
-import type { WorkflowRunSnapshot, ExecutionLogEntry } from "@/engine";
+import type { WorkflowRunSnapshot, ExecutionLogEntry, TimelineEntry } from "@/engine";
 
 export type ReplayState = "idle" | "playing" | "paused" | "finished";
 
 export class ReplayController {
   private snapshot: WorkflowRunSnapshot;
   private logs: ExecutionLogEntry[];
+  private timelineEntries: TimelineEntry[];
   private currentStep = 0;
   private state: ReplayState = "idle";
   private speed = 1.0; // 0.5, 1.0, 2.0, 5.0
@@ -14,10 +15,12 @@ export class ReplayController {
   constructor(
     snapshot: WorkflowRunSnapshot,
     logs: ExecutionLogEntry[],
+    timelineEntries: TimelineEntry[],
     onStateChange: () => void
   ) {
     this.snapshot = snapshot;
     this.logs = logs;
+    this.timelineEntries = timelineEntries;
     this.onStateChange = onStateChange;
   }
 
@@ -106,6 +109,20 @@ export class ReplayController {
     this.setStep(this.currentStep - 1);
   }
 
+  jumpToEvent(entry: TimelineEntry) {
+    this.pause();
+    if (!entry.nodeId) {
+      this.setStep(0);
+      return;
+    }
+    const sorted = this.getSortedExecutions();
+    const index = sorted.findIndex((e) => e.nodeId === entry.nodeId);
+    if (index >= 0) {
+      // Jump to the step right after this node executed so its output/result is visible
+      this.setStep(index + 1);
+    }
+  }
+
   getReplayedSnapshot(): WorkflowRunSnapshot {
     const sorted = this.getSortedExecutions();
     const visibleExecs = sorted.slice(0, this.currentStep);
@@ -155,6 +172,21 @@ export class ReplayController {
     return this.logs.filter((log) => {
       const logTime = new Date(log.timestamp).getTime();
       return logTime <= maxTime;
+    });
+  }
+
+  getReplayedTimelineEntries(): TimelineEntry[] {
+    const sorted = this.getSortedExecutions();
+    if (this.currentStep === 0) {
+      return this.timelineEntries.filter((e) => !e.nodeId);
+    }
+    const lastExec = sorted[this.currentStep - 1];
+    const maxTime = lastExec.completedAt
+      ? new Date(lastExec.completedAt).getTime()
+      : new Date(lastExec.startedAt || 0).getTime();
+    return this.timelineEntries.filter((entry) => {
+      const entryTime = new Date(entry.timestamp).getTime();
+      return entryTime <= maxTime;
     });
   }
 
