@@ -90,3 +90,53 @@ export interface MemoryDiagnostics {
   lastCompressedAt?: string;
   isHealthy: boolean;
 }
+
+// ── Memory Agent Domain Typings (Task 14.5A) ──────────────────────────────────
+
+export type MemoryOperationType =
+  | "create"
+  | "update"
+  | "delete"
+  | "archive"
+  | "restore"
+  | "merge"
+  | "split"
+  | "expire"
+  | "search";
+
+export interface MemoryOperation {
+  type: MemoryOperationType;
+  scope: MemoryScope;
+  key?: string;
+  value?: string;
+  memoryId?: string;
+  targetMemoryIds?: string[];
+  metadata?: MemoryMetadata;
+}
+
+export type MemoryOperationStatus = "idle" | "running" | "completed" | "failed";
+
+export interface MemoryConfiguration {
+  enableAutoArchive?: boolean;
+  maxEntriesLimit?: number;
+  decayThreshold?: number;
+  conflictResolutionStrategy?: "overwrite" | "merge" | "ignore";
+}
+
+export interface MemoryContext {
+  sessionId: string;
+  variables: Record<string, unknown>;
+  operationStatus: MemoryOperationStatus;
+  affectedMemoryIds: string[];
+}
+
+export interface MemoryOperationResult {
+  operation: MemoryOperationType;
+  success: boolean;
+  affectedMemoryIds: string[];
+  importance?: number;
+  confidence?: number;
+  relationships?: string[];
+  error?: string;
+  durationMs: number;
+}

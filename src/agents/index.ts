@@ -1,6 +1,7 @@
 export * from "./types/agent";
 export * from "./types/session";
 export * from "./types/research";
+export * from "./types/reviewer";
 export * from "./runtime/agent.interface";
 export * from "./runtime/base-agent";
 export * from "./runtime/concrete-agents";
