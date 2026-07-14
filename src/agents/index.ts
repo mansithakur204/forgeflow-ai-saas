@@ -22,6 +22,7 @@ export * from "./runtime/tools/tool-runtime";
 // Orchestration additions
 export * from "./types/orchestration";
 export * from "./types/parallel";
+export * from "./types/queue";
 export * from "./runtime/orchestration/message-bus";
 export * from "./runtime/orchestration/shared-memory";
 export * from "./runtime/orchestration/task-queue";
@@ -29,6 +30,7 @@ export * from "./runtime/orchestration/agent-router";
 export * from "./runtime/orchestration/agent-coordinator";
 export * from "./runtime/orchestration/multi-agent-orchestrator";
 export * from "./runtime/orchestration/parallel-execution-scheduler";
+export * from "./runtime/orchestration/agent-queue-manager";
 
 // Planning & Collaboration Engine additions
 export * from "./types/planning";

@@ -2,7 +2,7 @@
 // ForgeFlow AI — Multi-Agent Orchestrator
 // Coordinates the sequential/collaboration flow across Planner, Research,
 // Tool, Memory, and Reviewer agents via a central orchestration engine.
-// Supports dependency-aware parallel execution.
+// Supports dependency-aware parallel execution and queue-based job scheduling.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { AgentRegistry } from "../agent-registry";
@@ -18,12 +18,14 @@ import type {
 import type { HandoffRequest } from "../../types/planning";
 import { ParallelExecutionScheduler } from "./parallel-execution-scheduler";
 import type { ExecutionBranch, ExecutionBarrier, SynchronizationContext } from "../../types/parallel";
+import { AgentQueueManager } from "./agent-queue-manager";
 
 export class MultiAgentOrchestrator {
   private registry: AgentRegistry;
   private coordinator: AgentRuntimeCoordinator;
   private handoffManager: AgentHandoffManager;
   private config: OrchestratorConfiguration;
+  private queueManager: AgentQueueManager;
 
   private currentContext?: OrchestratorContext;
   private activeSyncContext?: SynchronizationContext;
@@ -33,7 +35,8 @@ export class MultiAgentOrchestrator {
   constructor(
     registry: AgentRegistry,
     coordinator: AgentRuntimeCoordinator,
-    config: OrchestratorConfiguration = {}
+    config: OrchestratorConfiguration = {},
+    queueManager?: AgentQueueManager
   ) {
     this.registry = registry;
     this.coordinator = coordinator;
@@ -45,15 +48,21 @@ export class MultiAgentOrchestrator {
       parallelExecutionEnabled: false,
       ...config,
     };
+    // Task 15.3A/G Dependency Injection
+    this.queueManager = queueManager || new AgentQueueManager({}, console);
   }
 
   /**
-   * Task 15.1D: Lifecycle Control Start
+   * Task 15.1D: Lifecycle Control Start (Integrated with Queue execution bounds)
    */
   async start(goal: string, logger: any = console, correlationId = `corr-${Date.now()}`): Promise<OrchestratorResult> {
     const startedAt = Date.now();
     this.isPaused = false;
     this.isCancelled = false;
+
+    // Enqueue execution job (Task 15.3B/C Scheduling Integration)
+    const job = this.queueManager.enqueue("planner-agent", goal, "medium");
+    this.queueManager.startExecution(job.id);
 
     // ── Telemetry: Emit ORCHESTRATION_STARTED ──
     logger.info(`Multi-Agent Orchestrator started orchestration`, { event: "ORCHESTRATION_STARTED", goal, correlationId });
@@ -69,7 +78,7 @@ export class MultiAgentOrchestrator {
       currentStepIndex: 0,
       totalSteps: 5,
       sharedVariables: {},
-      sharedMetadata: { goal },
+      sharedMetadata: { goal, jobId: job.id },
     };
 
     this.currentContext = context;
@@ -97,7 +106,7 @@ export class MultiAgentOrchestrator {
         await this.yieldIfPaused(logger);
 
         // Transition State Machine states
-        context.currentState = "researching"; // Set to researching initially
+        context.currentState = "researching";
         context.currentAgentId = "parallel-branches";
         context.currentStepIndex = 2;
         context.progress = 40;
@@ -156,7 +165,7 @@ export class MultiAgentOrchestrator {
         context.currentStepIndex = 2;
         context.progress = 35;
 
-        // Handoff Planner -> Research (Task 15.1B Flow)
+        // Handoff Planner -> Research
         await this.dispatchHandoff("planner-agent", "research-agent", "task-research", { planOutput }, sharedContext, correlationId);
 
         logger.info(`Orchestration starting Agent: research-agent`, { event: "AGENT_STARTED", agentId: "research-agent" });
@@ -193,7 +202,7 @@ export class MultiAgentOrchestrator {
 
       // Handoff Tool -> Memory
       await this.dispatchHandoff(
-        this.config.parallelExecutionEnabled ? "tool-agent" : "tool-agent",
+        "tool-agent",
         "memory-agent",
         "task-memory",
         executionVariables,
@@ -230,6 +239,9 @@ export class MultiAgentOrchestrator {
       const durationMs = Date.now() - startedAt;
       context.executionTimeMs = durationMs;
 
+      // Complete execution inside Queue manager (Task 15.3C Lifecycle completed)
+      this.queueManager.completeExecution(job.id, sharedContext.getAll());
+
       // ── Telemetry: Emit ORCHESTRATION_COMPLETED ──
       logger.info(`Multi-Agent Orchestrator completed execution successfully`, {
         event: "ORCHESTRATION_COMPLETED",
@@ -251,6 +263,13 @@ export class MultiAgentOrchestrator {
       const durationMs = Date.now() - startedAt;
       context.currentState = this.isCancelled ? "cancelled" : "failed";
       context.executionTimeMs = durationMs;
+
+      if (this.isCancelled) {
+        this.queueManager.cancelExecution(job.id);
+      } else {
+        // Fail execution in Queue manager (Task 15.3D Retries/DLQ)
+        this.queueManager.failExecution(job.id, err.message);
+      }
 
       const eventName = this.isCancelled ? "ORCHESTRATION_COMPLETED" : "ORCHESTRATION_FAILED";
       logger.error(`Orchestration finished in state: ${context.currentState}. Error: ${err.message}`, {
@@ -310,6 +329,10 @@ export class MultiAgentOrchestrator {
 
   getActiveSynchronizationContext(): SynchronizationContext | undefined {
     return this.activeSyncContext;
+  }
+
+  getQueueManager(): AgentQueueManager {
+    return this.queueManager;
   }
 
   private checkCancellation(): void {
