@@ -36,12 +36,33 @@ export interface HandoffRequest {
   toAgentId: string;
   taskId: string;
   payload: Record<string, unknown>;
+  correlationId?: string;
+  workflowId?: string;
+  fallbackAgentId?: string;
+  timeoutMs?: number;
 }
 
 export interface HandoffResult {
   success: boolean;
   transferredData: Record<string, unknown>;
   error?: string;
+  durationMs?: number;
+  receiverAgentId?: string;
+  senderAgentId?: string;
+  sharedMetadata?: Record<string, unknown>;
+}
+
+export type HandoffStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+
+export interface HandoffContext {
+  handoffId: string;
+  correlationId: string;
+  workflowId?: string;
+  status: HandoffStatus;
+  sharedVariables: Record<string, unknown>;
+  sharedMetadata: Record<string, unknown>;
+  executionState: Record<string, unknown>;
+  timelineEvents: string[];
 }
 
 // ── Planner Agent Domain Typings ──────────────────────────────────────────────
