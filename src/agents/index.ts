@@ -26,6 +26,7 @@ export * from "./runtime/orchestration/shared-memory";
 export * from "./runtime/orchestration/task-queue";
 export * from "./runtime/orchestration/agent-router";
 export * from "./runtime/orchestration/agent-coordinator";
+export * from "./runtime/orchestration/multi-agent-orchestrator";
 
 // Planning & Collaboration Engine additions
 export * from "./types/planning";

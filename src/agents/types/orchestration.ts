@@ -30,3 +30,47 @@ export interface MessageBusEvent {
   timestamp: string;
   payload: Record<string, unknown>;
 }
+
+// ── Multi-Agent Orchestrator Domain Typings (Task 15.1A) ──────────────────────
+
+export type OrchestratorState =
+  | "idle"
+  | "planning"
+  | "researching"
+  | "executing_tools"
+  | "updating_memory"
+  | "reviewing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface OrchestratorConfiguration {
+  maxExecutionTimeMs?: number;
+  maxRetries?: number;
+  requireManualApproval?: boolean;
+  parallelExecutionEnabled?: boolean;
+}
+
+export interface OrchestratorContext {
+  orchestrationId: string;
+  correlationId: string;
+  currentState: OrchestratorState;
+  currentAgentId?: string;
+  progress: number;
+  executionTimeMs: number;
+  currentStepIndex: number;
+  totalSteps: number;
+  sharedVariables: Record<string, unknown>;
+  sharedMetadata: Record<string, unknown>;
+}
+
+export interface OrchestratorResult {
+  orchestrationId: string;
+  success: boolean;
+  finalState: OrchestratorState;
+  output: string;
+  error?: string;
+  durationMs: number;
+  stepsExecuted: number;
+  variables: Record<string, unknown>;
+}
