@@ -49,20 +49,6 @@ export default function CreateAgentWizard() {
     }
   }, [isAuthLoaded, isSignedIn, router]);
 
-  if (!isAuthLoaded || !isSignedIn) {
-    return (
-      <RootLayoutShell>
-        <div className="flex flex-col gap-6 p-4 md:p-6 max-w-screen-xl mx-auto h-full">
-          <div className="flex flex-col gap-2 animate-pulse">
-            <div className="h-4 w-32 bg-muted rounded" />
-            <div className="h-8 w-64 bg-muted rounded mt-2" />
-          </div>
-          <div className="h-96 bg-muted rounded-xl mt-6 animate-pulse" />
-        </div>
-      </RootLayoutShell>
-    );
-  }
-
   // Form State
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -95,6 +81,20 @@ export default function CreateAgentWizard() {
   const [permissionInternet, setPermissionInternet] = useState(true);
   const [permissionFiles, setPermissionFiles] = useState(true);
   const [permissionWebhooks, setPermissionWebhooks] = useState(false);
+
+  if (!isAuthLoaded || !isSignedIn) {
+    return (
+      <RootLayoutShell>
+        <div className="flex flex-col gap-6 p-4 md:p-6 max-w-screen-xl mx-auto h-full">
+          <div className="flex flex-col gap-2 animate-pulse">
+            <div className="h-4 w-32 bg-muted rounded" />
+            <div className="h-8 w-64 bg-muted rounded mt-2" />
+          </div>
+          <div className="h-96 bg-muted rounded-xl mt-6 animate-pulse" />
+        </div>
+      </RootLayoutShell>
+    );
+  }
 
   // Filter models based on selected provider
   const filteredModels = mockModels.filter((m) => m.providerId === providerId);
