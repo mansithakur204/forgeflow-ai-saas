@@ -64,7 +64,7 @@ function nextId(prefix: string): string {
 
 const MAX_RECORDS = 500; // cap to avoid unbounded growth
 
-class ExecutionHistoryStore {
+export class ExecutionHistoryStore {
   private workflowRuns: WorkflowRunRecord[] = [];
   private agentRuns: AgentRunRecord[] = [];
   private activityLog: ActivityEvent[] = [];

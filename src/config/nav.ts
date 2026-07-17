@@ -9,6 +9,10 @@ import {
   Store,
   Settings2,
   BookOpen,
+  Users,
+  CreditCard,
+  Key,
+  Code2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -59,9 +63,8 @@ export const navGroups: NavGroup[] = [
       },
       {
         title: "Analytics",
-        href: "/analytics",
+        href: "/dashboard/observability",
         icon: BarChart3,
-        disabled: true,
       },
     ],
   },
@@ -70,9 +73,8 @@ export const navGroups: NavGroup[] = [
     items: [
       {
         title: "Integrations",
-        href: "/integrations",
+        href: "/dashboard/integrations",
         icon: Plug,
-        disabled: true,
       },
       {
         title: "Templates",
@@ -82,9 +84,8 @@ export const navGroups: NavGroup[] = [
       },
       {
         title: "Marketplace",
-        href: "/marketplace",
+        href: "/dashboard/marketplace",
         icon: Store,
-        disabled: true,
       },
     ],
   },
@@ -92,10 +93,29 @@ export const navGroups: NavGroup[] = [
     label: "System",
     items: [
       {
+        title: "Team",
+        href: "/dashboard/team",
+        icon: Users,
+      },
+      {
+        title: "Billing",
+        href: "/dashboard/billing",
+        icon: CreditCard,
+      },
+      {
+        title: "Secrets",
+        href: "/dashboard/secrets",
+        icon: Key,
+      },
+      {
+        title: "API",
+        href: "/dashboard/api",
+        icon: Code2,
+      },
+      {
         title: "Settings",
-        href: "/settings",
+        href: "/dashboard/settings",
         icon: Settings2,
-        disabled: true,
       },
       {
         title: "Docs",

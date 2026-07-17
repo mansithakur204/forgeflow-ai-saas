@@ -44,7 +44,19 @@ export type TimelineEventType =
   | "HTTP_REQUEST"
   | "HTTP_RESPONSE"
   | "WEBHOOK_RECEIVED"
-  | "CUSTOM_EVENT";
+  | "CUSTOM_EVENT"
+  | "AGENT_STARTED"
+  | "AGENT_COMPLETED"
+  | "TOKEN_USAGE_UPDATED"
+  | "COST_UPDATED"
+  | "LATENCY_UPDATED"
+  | "ANALYTICS_UPDATED"
+  | "MEMORY_RETRIEVED"
+  | "KNOWLEDGE_RETRIEVED"
+  | "PROVIDER_CALLED"
+  | "PROVIDER_RETURNED"
+  | "QUEUE_WAITING"
+  | "QUEUE_FINISHED";
 
 // ── Timeline Entry Status ────────────────────────────────────────────────────
 

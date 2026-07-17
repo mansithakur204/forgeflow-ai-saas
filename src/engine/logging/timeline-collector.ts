@@ -91,9 +91,14 @@ function inferStatus(eventType: TimelineEventType): TimelineEntryStatus {
     case "WORKFLOW_CANCELLED":
       return "skipped";
     case "AI_RETRY":
+    case "QUEUE_WAITING":
       return "pending";
     case "CUSTOM_EVENT":
+    case "AGENT_STARTED":
+    case "PROVIDER_CALLED":
       return "running";
+    default:
+      return "completed";
   }
 }
 

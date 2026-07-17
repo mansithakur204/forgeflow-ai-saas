@@ -1,4 +1,5 @@
 import type { AgentSession } from "./session";
+import type { ApprovalStatus } from "./approval";
 
 export interface AgentTask {
   id: string;
@@ -42,7 +43,8 @@ export type OrchestratorState =
   | "reviewing"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "paused";
 
 export interface OrchestratorConfiguration {
   maxExecutionTimeMs?: number;
@@ -62,6 +64,13 @@ export interface OrchestratorContext {
   totalSteps: number;
   sharedVariables: Record<string, unknown>;
   sharedMetadata: Record<string, unknown>;
+
+  // HITL Approval metadata for Execution Inspector (Task 15.4E)
+  approvalStatus?: ApprovalStatus;
+  approver?: string;
+  approvalTime?: string;
+  approvalReason?: string;
+  timeoutRemainingMs?: number;
 }
 
 export interface OrchestratorResult {

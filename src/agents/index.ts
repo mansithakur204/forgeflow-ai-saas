@@ -23,6 +23,7 @@ export * from "./runtime/tools/tool-runtime";
 export * from "./types/orchestration";
 export * from "./types/parallel";
 export * from "./types/queue";
+export * from "./types/approval";
 export * from "./runtime/orchestration/message-bus";
 export * from "./runtime/orchestration/shared-memory";
 export * from "./runtime/orchestration/task-queue";
@@ -31,6 +32,7 @@ export * from "./runtime/orchestration/agent-coordinator";
 export * from "./runtime/orchestration/multi-agent-orchestrator";
 export * from "./runtime/orchestration/parallel-execution-scheduler";
 export * from "./runtime/orchestration/agent-queue-manager";
+export * from "./runtime/orchestration/approval-engine";
 
 // Planning & Collaboration Engine additions
 export * from "./types/planning";
@@ -108,6 +110,11 @@ export * from "./runtime/autonomous/capability-matcher";
 export * from "./runtime/autonomous/selectors";
 export * from "./runtime/autonomous/decision-engine";
 export * from "./runtime/autonomous/autonomous-coordinator";
+
+// Agent Observability & Analytics additions
+export * from "./observability/types";
+export * from "./observability/cost/cost-estimator";
+export * from "./observability/services/analytics-service";
 
 
 
